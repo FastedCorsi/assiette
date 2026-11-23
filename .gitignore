@@ -1,0 +1,4 @@
+assiette-*.json
+node_modules/
+.env
+.env.*
