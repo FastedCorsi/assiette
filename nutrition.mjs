@@ -322,14 +322,14 @@ export async function lookupProducts(query, signal) {
   const code = term.replace(/\s/g, '');
   const isBarcode = /^\d{8,14}$/.test(code);
   const url = new URL(isBarcode ? `/api/v3/product/${code}` : '/cgi/search.pl', offOrigin);
-  if (!isBarcode) {
+  if (isBarcode) {
+    url.searchParams.set('fields', offFields);
+  } else {
     url.searchParams.set('action', 'process');
     url.searchParams.set('search_terms', term.toLocaleLowerCase('fr-FR'));
     url.searchParams.set('search_simple', '1');
     url.searchParams.set('json', '1');
-    url.searchParams.set('page_size', '8');
   }
-  url.searchParams.set('fields', offFields);
 
   // The barcode API accepts an application identifier. The legacy text search
   // does not reliably handle the cross-origin preflight for that header.
@@ -340,5 +340,6 @@ export async function lookupProducts(query, signal) {
   if (!response.ok) throw new Error('Open Food Facts est momentanément indisponible.');
   const result = await response.json();
   const products = isBarcode ? [result.product] : result.products ?? [];
-  return products.filter(Boolean).map(formatProduct).filter(product => product && [product.kcal, product.protein, product.carbs, product.fat].some(value => value !== null));
+  return products.filter(Boolean).map(formatProduct).filter(product => product &&
+    [product.kcal, product.protein, product.carbs, product.fat].some(value => value !== null)).slice(0, 8);
 }

@@ -43,6 +43,16 @@ function productLookup(item, refresh) {
   const status = el('p', 'small subtle');
   status.setAttribute('role', 'status');
 
+  function offerSearchPage(searchText) {
+    const url = new URL('https://fr.openfoodfacts.org/cgi/search.pl');
+    url.search = new URLSearchParams({ search_terms: searchText, search_simple: '1', action: 'process' });
+    const link = el('a', 'button compact', 'Chercher sur Open Food Facts');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    results.append(link);
+  }
+
   async function lookup() {
     if (search.disabled) return;
     const searchText = query.value.trim();
@@ -59,6 +69,7 @@ function productLookup(item, refresh) {
     try {
       const products = await lookupProducts(searchText, request.signal);
       status.textContent = products.length ? 'Choisis le produit correspondant.' : 'Aucun produit trouvé. Essaie le code-barres ou saisis les valeurs de l’étiquette.';
+      if (!products.length) offerSearchPage(searchText);
       for (const product of products) {
         const option = button(product.name, 'button compact result-option');
         const reference = product.unit === 'ml' ? '100 ml' : product.unit === 'g' ? '100 g' : '100 g/ml';
@@ -82,7 +93,10 @@ function productLookup(item, refresh) {
         results.append(option);
       }
     } catch {
-      if (dialog.open) status.textContent = 'Recherche indisponible. Tu peux saisir les valeurs de l’étiquette.';
+      if (dialog.open) {
+        status.textContent = 'Recherche indisponible. Essaie le code-barres ou saisis les valeurs de l’étiquette.';
+        offerSearchPage(searchText);
+      }
     } finally {
       clearTimeout(timeout);
       lookups.delete(request);
