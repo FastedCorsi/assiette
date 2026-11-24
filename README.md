@@ -5,17 +5,20 @@ Assiette est un journal nutritionnel personnel en français. L’application fon
 ## Utilisation
 
 1. Dans **Profil**, renseigne ton âge, ta taille, ton poids, ton objectif et ton activité quotidienne hors sport. Si tu t’entraînes, ajoute le nombre de séances par semaine, l’activité principale et la durée d’une séance. Le profil se conserve entre les visites.
-2. Dans **Journal**, écris par exemple « 150 g de poulet, riz cuit, 2 clémentines ». Vérifie les portions et la préparation proposées. Dans le détail d’un ingrédient, **Chercher un aliment ou un plat dans Ciqual** permet de choisir une référence du catalogue. Pour un produit de marque, utilise sa fiche Open Food Facts ou son étiquette. Les données absentes sont indiquées dans le total.
+2. Dans **Journal**, utilise **Ajouter un repas** ou écris par exemple « 150 g de poulet, riz cuit, 2 clémentines ». Vérifie les portions et la préparation proposées. **Chercher un aliment ou un plat dans Ciqual** affiche les fiches correspondantes. Pour une marque, vérifie la fiche Open Food Facts avec le code-barres ou les valeurs de l’étiquette. Les totaux signalent les valeurs inconnues, y compris les fibres.
 3. Enregistre les boissons dans le même journal. Le repère Anses s’applique à l’eau nature saisie. Le volume de toutes les boissons reste visible. Si tu définis un repère manuel de boissons, il porte sur ce volume total.
-4. Consulte les jours précédents et enregistre tes pesées dans **Historique**. Chaque journée enregistrée conserve ses repères. Une modification du profil met à jour ceux du jour courant.
+4. Dans **Bilan de la journée**, confirme la journée quand toutes les entrées sont saisies. Le bilan propose des exemples de portions pour un prochain repas quand l’écart mesuré en protéines ou fibres le justifie. Les sept jours précédents indiquent pour chaque indicateur le nombre de jours confirmés réellement comparables. Modifier un repas ou une boisson rouvre la journée.
+5. Consulte les jours précédents et enregistre tes pesées dans **Historique**. Chaque journée enregistrée conserve ses repères. Une modification du profil met à jour ceux du jour courant.
 
 Dans **Profil**, l’aperçu sépare le maintien estimé, l’écart réel avec ce maintien et la cible d’énergie. Le déficit est réglable pour la perte de poids dans les limites décrites ci-dessous. Le mode protéines permet de choisir les repères généraux, une cible sportive par kilo ou une cible manuelle en grammes. Les cibles manuelles d’énergie sont disponibles dans **Ajuster mes repères manuellement**.
 
-Dans **Historique**, la tendance compare deux périodes consécutives de 14 jours lorsqu’il y a au moins deux pesées dans chacune. Elle donne un retour sur l’évolution du poids sans recalcul automatique de la cible à partir des pesées. [National Academies, suivi de l’équilibre énergétique](https://www.nationalacademies.org/read/26818/chapter/9)
+Dans **Historique**, la tendance compare deux périodes consécutives de 14 jours lorsqu’il y a au moins deux pesées dans chacune. **Faire le point sur la cible calories** nécessite, pour chacune des quatre semaines précédentes, au moins cinq journées confirmées avec un total calorique complet et trois pesées. Selon la tendance et la qualité des données, Assiette peut proposer un essai de 100 kcal par jour de plus ou de moins. Cet écart et les seuils de couverture sont des choix de l’application. Le chiffre est chargé en aperçu, puis appliqué si tu enregistres le profil. [National Academies, suivi de l’équilibre énergétique](https://www.nationalacademies.org/read/26818/chapter/9)
 
 Dans l’onglet **Photo**, le navigateur analyse l’image et propose plusieurs aliments ainsi que des portions approximatives. Vérifie la liste, ajoute les ingrédients cachés ou non reconnus et corrige les quantités avant d’enregistrer. Les valeurs sont calculées à partir des aliments et portions sélectionnés.
 
-Le profil, le journal et les pesées sont enregistrés dans le navigateur. L’export JSON permet de transférer ou restaurer ces données. Sur l’iPhone, **Profil → Enregistrer dans Fichiers** ouvre le partage de fichier. Choisis iCloud Drive pour conserver une copie accessible sur tes autres appareils. Seul le terme saisi dans la recherche de produit est envoyé à Open Food Facts. La photo est traitée sur l’appareil.
+Le profil, le journal et les pesées sont enregistrés dans le navigateur. **Sauvegarde → Enregistrer une copie** ouvre le partage de fichier sur l’iPhone. Choisis **Enregistrer dans Fichiers → iCloud Drive** pour conserver une copie sur tes autres appareils. Utilise **Restaurer depuis un fichier** pour la récupérer. Le fichier JSON contient le journal et le profil. La recherche de marque envoie le terme saisi à Open Food Facts. L’analyse photo se fait sur l’appareil.
+
+Depuis Safari, **Partager → Sur l’écran d’accueil** installe Assiette comme web app. Après une première ouverture en ligne, le journal, le profil et la recherche Ciqual fonctionnent hors connexion. La recherche de marques, la sauvegarde GitHub et le chargement du modèle photo nécessitent Internet. Une copie externe protège les données si le navigateur efface le stockage local ou si le journal de la web app est vide à l’installation. [WebKit, politique de stockage](https://webkit.org/blog/14403/updates-to-storage-policy/)
 
 ### Sauvegarde automatique
 
@@ -31,14 +34,15 @@ Lance le serveur et les tests depuis le dossier du projet.
 
 ```sh
 python -m http.server 4173 --bind 127.0.0.1
-node --test journal.test.mjs nutrition.test.mjs ciqual-search.test.mjs backup-crypto.test.mjs protein-targets.test.mjs weight-trend.test.mjs
+node --test journal.test.mjs nutrition.test.mjs ciqual-search.test.mjs backup-crypto.test.mjs protein-targets.test.mjs weight-trend.test.mjs guidance.test.mjs adaptive-targets.test.mjs
 ```
 
-Le journal s’ouvre sur `http://127.0.0.1:4173/`. Le site est statique et ne comporte aucune étape de compilation.
+Le journal s’ouvre sur `http://127.0.0.1:4173/`. Le site est statique et ne comporte aucune étape de compilation. Pour publier un changement, incrémente ensemble la version du cache de `service-worker.js` et les paramètres de version des ressources.
 
 ## Sources et repères
 
 - Aliments génériques. La recherche locale couvre les 3 484 entrées de la [table Ciqual 2025 de l’Anses](https://doi.org/10.57745/RDMHWY), sous Licence Ouverte Etalab 2.0. Les portions proposées sont indicatives et modifiables. Pour un plat composé, la fiche choisie représente une préparation de référence.
+- Fibres. Les valeurs viennent de la colonne « Fibres alimentaires » de Ciqual et des étiquettes de marque lorsqu’elles les renseignent. Le repère général adulte est de 30 g/jour. Les anciens journaux sans valeur de fibres demeurent consultables. La révision d’une fiche Ciqual correspondante peut compléter la valeur. [Anses, références nutritionnelles](https://www.anses.fr/system/files/NUT2012SA0103Ra-2.pdf)
 - Produits de marque. Les fiches sont interrogées dans [Open Food Facts](https://world.openfoodfacts.org/), base collaborative sous [licence ODbL](https://world.openfoodfacts.org/terms-of-use).
 - Énergie. Le métabolisme de base est estimé à partir du poids, de la taille, de l’âge et du sexe selon [Henry 2005, tableau 15](https://www.cambridge.org/core/services/aop-cambridge-core/content/view/61A9EA486ABFA478FEF2FCE1E70D5BEE/S1368980005001394a.pdf). Les quatre choix d’activité hors sport correspondent aux niveaux de 1,4, 1,6, 1,8 et 2,0 repris par l’[EFSA](https://doi.org/10.2903/j.efsa.2013.3005).
 - Sport. Les valeurs par activité proviennent des Compendia 2024 pour [19 à 59 ans](https://pacompendium.com/adult-compendium/) et [60 ans et plus](https://pacompendium.com/older-adult-compendium/). L’application ajoute la dépense des séances au-dessus de 1 MET de repos, en moyenne sur sept jours. Elle utilise 3,5 ou 2,7 mL d’oxygène par kg et par minute pour 1 MET selon la tranche d’âge et environ 5 kcal par litre d’oxygène. Le type et la durée sont nécessaires pour obtenir cet ajustement. [Conversion du Compendium](https://pacompendium.com/corrected-mets/)

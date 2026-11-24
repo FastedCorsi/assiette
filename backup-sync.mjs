@@ -3,7 +3,7 @@ import {
   loadDeviceBackup, saveDeviceBackup, updateDeviceBackup, clearDeviceBackup,
 } from './backup-crypto.mjs';
 import { makeGitHubBackup } from './backup-github.mjs';
-import { exportJournal, importJournal } from './journal.mjs';
+import { exportJournal, importJournal } from './journal.mjs?v=suivi-2';
 
 const formatTime = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const isEmpty = state => !state.profile && !Object.keys(state.days).length;

@@ -133,6 +133,40 @@ test('les calories inconnues, une quantité vide et un vrai zéro restent distin
   assert.equal(partial.missing.kcal, 1);
 });
 
+test('les fibres sont comptées sans assimiler une ancienne valeur absente à zéro', () => {
+  const legacy = { ...entries[0], items: [{ ...entries[0].items[0], fat: 0 }] };
+  const water = { ...entries[1], items: [{ ...entries[1].items[0], fiber: 0 }] };
+  const identified = { ...legacy, items: [{ ...legacy.items[0], grams: 150, fiber: 1.7 }] };
+  const partial = aggregateEntries([legacy, water, identified]);
+  assert.equal(knownTotal(partial, 'fiber'), 2.55);
+  assert.equal(partial.missing.fiber, 1);
+  assert.equal(partial.unknown, 0);
+  assert.equal(knownTotal(aggregateEntries([legacy]), 'fiber'), null);
+  assert.equal(knownTotal(aggregateEntries([water]), 'fiber'), 0);
+  assert.equal(calculateTargets(profile).fiber, 30);
+});
+
+test('la sauvegarde conserve les fibres renseignées et laisse les anciennes journées ouvertes', () => {
+  const oldDate = '2026-11-23';
+  const newDate = '2026-11-24';
+  const historicTargets = { kcal: 2004, protein: 75, carbs: 251, fat: 78, water: 1500 };
+  const product = {
+    ...entries[0], items: [{ ...entries[0].items[0], fiber: 2.5, barcode: '0000000000000' }],
+  };
+  const state = { profile, days: {
+    [oldDate]: { entries, targets: historicTargets },
+    [newDate]: { entries: [product], targets: calculateTargets(profile), complete: true },
+  } };
+  const restored = importJournal(exportJournal(state));
+  assert.ok(!Object.hasOwn(restored.days[oldDate], 'complete'));
+  assert.ok(!Object.hasOwn(restored.days[oldDate].entries[0].items[0], 'fiber'));
+  assert.deepEqual(restored.days[oldDate].targets, historicTargets);
+  assert.equal(restored.days[newDate].complete, true);
+  assert.equal(restored.days[newDate].targets.fiber, 30);
+  assert.equal(restored.days[newDate].entries[0].items[0].fiber, 2.5);
+  assert.equal(restored.days[newDate].entries[0].items[0].barcode, '0000000000000');
+});
+
 test('la sauvegarde préserve les pesées et repères historiques et rejette les entrées invalides', () => {
   const training = { ...profile, sport: 4, sportMinutes: 45, sportType: 'strength' };
   const historicTargets = { kcal: 2004, protein: 75, carbs: 251, fat: 78, water: 1500 };

@@ -7,8 +7,10 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="Un journal nutritionnel pour noter vos repas, vos boissons et suivre vos objectifs.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.mjs?v=ciqual-2025"></script>
+  <link rel="apple-touch-icon" href="./icon-180.png">
+  <link rel="manifest" href="./assiette.webmanifest">
+  <link rel="stylesheet" href="./style.css?v=suivi-2">
+  <script type="module" src="./app.mjs?v=suivi-2"></script>
   <title>Assiette · Journal nutritionnel</title>
 </head>
 <body>
@@ -44,12 +46,15 @@
   </header>
 
   <main class="shell">
+    <div id="app-update" class="update-bar" hidden>
+      <p>Une mise à jour d’Assiette est disponible.</p>
+      <button id="install-update" class="button" type="button">Mettre à jour</button>
+    </div>
     <section id="journal" aria-labelledby="journal-title">
       <div class="page-head">
         <div>
           <h1 id="journal-title">Mon journal</h1>
           <p id="day-caption" class="subtle"></p>
-          <a id="backup-indicator" href="#profil" hidden></a>
         </div>
         <div class="date-controls" aria-label="Changer de journée">
           <button type="button" class="icon-button" id="previous-day" aria-label="Jour précédent"><svg><use href="#i-left"/></svg></button>
@@ -57,6 +62,12 @@
           <button type="button" class="icon-button" id="next-day" aria-label="Jour suivant"><svg><use href="#i-right"/></svg></button>
           <button type="button" class="button compact" id="go-today" hidden>Aujourd’hui</button>
         </div>
+      </div>
+
+      <div class="journal-actions">
+        <button id="quick-entry" class="button filled" type="button"><svg><use href="#i-plus"/></svg> Ajouter un repas</button>
+        <button class="button" type="button" data-water="250"><svg><use href="#i-drop"/></svg> + 250 ml d’eau</button>
+        <a id="backup-indicator" href="#donnees">Sauvegarde</a>
       </div>
 
       <section class="hero" aria-labelledby="energy-title">
@@ -72,7 +83,7 @@
 
       <div class="journal-grid">
         <div class="journal-stack">
-          <section class="panel" aria-labelledby="entry-title">
+          <section id="entry-panel" class="panel" aria-labelledby="entry-title">
             <div class="section-head">
               <div><h2 id="entry-title">Ajouter une entrée</h2><p class="subtle">Liste les ingrédients ou boissons, séparés par des virgules.</p></div>
             </div>
@@ -96,6 +107,7 @@
                 <p class="subtle small">Assiette repère les aliments visibles et propose des portions. Le premier essai télécharge environ 30 Mo. La photo est analysée sur cet appareil.</p>
                 <img id="photo-preview" hidden alt="Aperçu de la photo sélectionnée">
                 <button id="photo-analyze" class="button filled" type="button" disabled><svg><use href="#i-spark"/></svg> Analyser la photo</button>
+                <button id="clear-photo" class="button text-button" type="button" hidden>Retirer la photo</button>
                 <div id="photo-status" class="subtle small" role="status"></div>
                 <div id="photo-results"></div>
                 <button id="photo-to-text" type="button" class="button text-button">Décrire le repas à la main</button>
@@ -112,14 +124,22 @@
           <section class="panel" aria-labelledby="water-title">
             <div class="section-head"><span class="tile blue"><svg><use href="#i-drop"/></svg></span><div><h2 id="water-title">Ajouter de l’eau</h2><p class="subtle">Un geste pour enregistrer un verre.</p></div></div>
             <div class="quick-water">
-              <button class="button" type="button" data-water="250">+ 250 ml</button>
               <button class="button" type="button" data-water="500">+ 500 ml</button>
               <button class="button" type="button" data-water="1000">+ 1 L</button>
             </div>
           </section>
           <section class="panel summary" aria-labelledby="summary-title">
-            <div class="section-head"><span class="tile mint"><svg><use href="#i-spark"/></svg></span><div><h2 id="summary-title">Bilan de la journée</h2><p class="subtle">Se précise au fil de tes entrées.</p></div></div>
+            <div class="section-head"><span class="tile mint"><svg><use href="#i-spark"/></svg></span><h2 id="summary-title">Bilan de la journée</h2></div>
             <div id="summary"></div>
+            <div id="guidance" class="guidance" hidden></div>
+            <div id="day-check" class="day-check" hidden>
+              <p id="day-check-note" class="small subtle"></p>
+              <button id="confirm-day" class="button" type="button" aria-describedby="day-check-note"></button>
+            </div>
+          </section>
+          <section class="panel" aria-labelledby="weekly-title">
+            <div class="section-head"><h2 id="weekly-title">Les 7 jours précédents</h2></div>
+            <div id="weekly-overview"></div>
           </section>
         </aside>
       </div>
@@ -136,6 +156,7 @@
             <label class="field">Poids (kg)<input type="number" name="weight" min="25" max="350" step="0.1" placeholder="72,5" required></label>
             <button class="button filled" type="submit">Enregistrer une pesée</button>
           </form>
+          <div id="calorie-review" class="calorie-review"></div>
         </section>
         <section class="panel" aria-labelledby="history-days-title">
           <div class="section-head"><h2 id="history-days-title">Journées enregistrées</h2></div>
@@ -200,24 +221,24 @@
               <ul class="small">
                 <li><a href="https://doi.org/10.2903/j.efsa.2013.3005">EFSA · Besoins énergétiques et niveaux d’activité</a></li>
                 <li><a href="https://pacompendium.com/adult-compendium/">Compendium · Dépense par activité</a> et <a href="https://pacompendium.com/older-adult-compendium/">références dès 60 ans</a></li>
-                <li><a href="https://www.anses.fr/system/files/NUT2012SA0103Ra-2.pdf">Anses · Fourchettes de protéines, glucides et lipides</a></li>
+                <li><a href="https://www.anses.fr/system/files/NUT2012SA0103Ra-2.pdf">Anses · Repères de macronutriments et de fibres</a></li>
                 <li><a href="https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/">NIH · Protéines et lipides pour les sportifs</a></li>
                 <li><a href="https://www.anses.fr/fr/article/eau-bouteille-eau-du-robinet-bonnes-pratiques-consommation">Anses · Repère d’eau</a></li>
                 <li>Adaptation du poids · <a href="https://www.nhlbi.nih.gov/sites/default/files/media/docs/obesity-evidence-review.pdf">NHLBI</a> et <a href="https://www.nhs.uk/live-well/healthy-weight/managing-your-weight/healthy-ways-to-gain-weight/">NHS</a></li>
               </ul>
             </details>
           </section>
-          <section class="panel" aria-labelledby="backup-title">
-            <div class="section-head"><h2 id="backup-title">Mes données</h2></div>
-            <p class="subtle">Le journal s’enregistre sur cet appareil. Pour garder une copie ailleurs, utilise la sauvegarde GitHub ou enregistre un fichier dans iCloud Drive.</p>
+          <section id="data-panel" class="panel" aria-labelledby="backup-title">
+            <div class="section-head"><h2 id="backup-title" tabindex="-1">Sauvegarder mon journal</h2></div>
+            <p class="subtle" id="file-backup-note">Le journal est enregistré sur cet appareil. Garde une copie séparée pour le retrouver si tu changes d’iPhone ou si Safari efface ses données.</p>
             <div class="backup-actions">
-              <button class="button" type="button" id="export-data">Exporter</button>
-              <button class="button" type="button" id="share-data" hidden>Enregistrer dans Fichiers</button>
-              <button class="button" type="button" id="import-data">Importer</button>
+              <button class="button filled" type="button" id="save-file" aria-describedby="file-backup-note">Enregistrer une copie</button>
+              <button class="button" type="button" id="import-data">Restaurer depuis un fichier</button>
             </div>
+            <p class="small subtle copy-note">Sur iPhone, choisis <strong>Enregistrer dans Fichiers</strong>, puis <strong>iCloud Drive</strong>. Le fichier contient ton journal et ton profil.</p>
             <input type="file" id="import-file" accept=".json,application/json" hidden>
             <div class="backup-panel">
-              <h3>Sauvegarde automatique sur GitHub</h3>
+              <h3>Copie chiffrée sur GitHub</h3>
               <p id="backup-status" class="small subtle" role="status">Journal enregistré sur cet appareil.</p>
               <details id="backup-setup">
                 <summary>Configurer la sauvegarde</summary>
@@ -236,6 +257,11 @@
                 <button id="backup-disconnect" class="button text-button compact" type="button">Déconnecter</button>
               </div>
             </div>
+            <details class="target-sources">
+              <summary>Installer sur l’iPhone</summary>
+              <p class="small subtle">Dans Safari, ouvre le menu de partage puis choisis <strong>Sur l’écran d’accueil</strong>. Ouvre Assiette une première fois avec Internet pour préparer le journal hors connexion. Si ton journal est vide après l’installation, restaure ta copie depuis Fichiers.</p>
+              <p id="offline-status" class="small subtle" role="status"></p>
+            </details>
           </section>
         </div>
       </div>

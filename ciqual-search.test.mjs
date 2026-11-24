@@ -1,15 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findCiqualFood, searchCiqualFoods } from './ciqual-search.mjs';
+import { findCiqualFood, findCiqualFoodByCode, searchCiqualFoods } from './ciqual-search.mjs';
 
 test('la clémentine, sa forme au pluriel et la mandarine reprennent les mêmes données officielles', () => {
   const reference = {
     name: 'Clémentine ou mandarine, chair sans peau, sans pépins, crue',
-    kcal: 45.5, protein: 0.81, carbs: 9.17, fat: 0.25, source: 'Ciqual 2025', unit: 'g',
+    kcal: 45.5, protein: 0.81, carbs: 9.17, fat: 0.25, fiber: 1.7, source: 'Ciqual 2025', unit: 'g',
   };
   for (const name of ['Clémentine', 'clementines', 'Clémentines crues', 'mandarine']) {
     assert.deepEqual(findCiqualFood(name), reference);
   }
+  assert.deepEqual(findCiqualFoodByCode(13024), reference);
+  assert.equal(findCiqualFoodByCode(18066).fiber, 0);
 });
 
 test('les états explicites sélectionnent les lignes proches sans confondre cru et cuit', () => {

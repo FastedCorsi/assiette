@@ -41,6 +41,11 @@ test('retrouve les calories des clémentines et plats du catalogue', () => {
   assert.equal(parseMeal('100 g de mon mélange maison unique')[0].kcal, null);
 });
 
+test('associe les fibres officielles au produit et conserve les valeurs absentes', () => {
+  const items = parseMeal('2 clémentines, 150 g de paëlla, 100 g de lentilles, 1 verre d’eau, plat inconnu');
+  assert.deepEqual(items.map(item => item.fiber), [1.7, 0.8, 8.45, 0, null]);
+});
+
 test('leaves invalid explicit quantities blank for correction', () => {
   const items = parseMeal('0g de riz, -15,5 g de poulet, 0 œuf, -2 verres d’eau, 101kg de riz');
   assert.deepEqual(items.map(item => item.grams), [null, null, null, null, null]);
@@ -49,7 +54,7 @@ test('leaves invalid explicit quantities blank for correction', () => {
 test('reads OFF products by free text or barcode and preserves missing macros', async t => {
   const product = {
     code: '0000000000000', product_name_fr: 'Exemple', quantity: '25 cl', brands: 'Test',
-    nutriments: { 'energy-kj_100g': 418.4, proteins_100g: 0, carbohydrates_100g: 12 },
+    nutriments: { 'energy-kj_100g': 418.4, proteins_100g: 0, carbohydrates_100g: 12, fiber_100g: '0.6' },
   };
   t.mock.method(globalThis, 'fetch', async url => {
     assert.equal(url.origin, 'https://world.openfoodfacts.org');
@@ -62,7 +67,8 @@ test('reads OFF products by free text or barcode and preserves missing macros', 
   });
   for (const query of ['marque à tester', '0000000000000']) {
     assert.deepEqual(await lookupProducts(query), [{
-      name: 'Exemple · Test', kcal: 100, protein: 0, carbs: 12, fat: null, source: 'Open Food Facts',
+      name: 'Exemple · Test', kcal: 100, protein: 0, carbs: 12, fat: null, fiber: 0.6, source: 'Open Food Facts',
+      barcode: '0000000000000',
       url: 'https://world.openfoodfacts.org/product/0000000000000', unit: 'ml',
     }]);
   }

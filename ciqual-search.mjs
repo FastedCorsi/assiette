@@ -1,10 +1,17 @@
-import { CIQUAL_FOODS } from './ciqual-catalog.mjs';
+import { CIQUAL_FOODS } from './ciqual-catalog.mjs?v=suivi-2';
 
 const STOP_WORDS = new Set(['a', 'au', 'aux', 'd', 'de', 'des', 'du', 'en', 'et', 'l', 'la', 'le', 'les', 'ou', 'pour']);
 const INVARIABLE = new Set(['ananas', 'anis', 'cassis', 'chips', 'couscous', 'mais', 'merlus', 'panais', 'paris', 'radis', 'tapas']);
 const IGNORED_PARTS = new Set(['chair', 'chair et peau', 'chair sans peau', 'pulpe', 'sans noyau', 'sans pepin', 'avec pepin', 'sans sel ajoute']);
 const PREPARATION = /^(?:cru|cuit(?: a l eau| a l etouffee| a la vapeur| au four)?|bouilli|braise|grille|roti)$/;
 let index;
+const foodByCode = new Map(CIQUAL_FOODS.map(([code, name, kcal, protein, carbs, fat, fiber]) => [
+  code, { name, kcal, protein, carbs, fat, fiber, source: 'Ciqual 2025', unit: 'g' },
+]));
+
+export function findCiqualFoodByCode(code) {
+  return foodByCode.get(code) ?? null;
+}
 
 function normalize(name) {
   return name.toLowerCase().replace(/œ/g, 'oe').replace(/æ/g, 'ae')
@@ -64,7 +71,8 @@ function getIndex() {
   const baseRows = new Map();
   const entries = [];
 
-  for (const [, name, kcal, protein, carbs, fat] of CIQUAL_FOODS) {
+  for (const food of foodByCode.values()) {
+    const { name } = food;
     const key = normalize(name);
     const searchable = singularKey(key);
     const withoutAverage = name.replace(/\s*\(aliment moyen\)\s*$/i, '');
@@ -75,8 +83,7 @@ function getIndex() {
     const labels = [...heads, ...prepared.labels];
     const commonName = /\(dit(?:e?s?) ([^)]+)\)$/i.exec(head)?.[1];
     if (commonName) labels.push(singularKey(normalize(commonName)));
-    const entry = { searchable, content: searchable.split(' '), labels, raw,
-      food: { name, kcal, protein, carbs, fat, source: 'Ciqual 2025', unit: 'g' } };
+    const entry = { searchable, content: searchable.split(' '), labels, raw, food };
     entries.push(entry);
     addUnique(exact, key, entry);
     // Terminal « aliment moyen » is a catalog qualifier; it can be omitted.

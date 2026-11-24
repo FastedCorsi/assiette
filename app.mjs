@@ -1,18 +1,22 @@
 import { $, $$, el, icon, button, empty, number, volume } from './ui.mjs';
-import { parseMeal } from './nutrition.mjs?v=ciqual-2025';
-import { openReview } from './review.mjs?v=ciqual-2025';
-import { createBackupSync } from './backup-sync.mjs';
+import { parseMeal } from './nutrition.mjs?v=suivi-2';
+import { openReview } from './review.mjs?v=suivi-2';
+import { createBackupSync } from './backup-sync.mjs?v=suivi-2';
 import { SPORT_OPTIONS, sportCaloriesPerDay, sportMet } from './activity.mjs';
-import { weightTrend } from './weight-trend.mjs';
+import { weightTrend } from './weight-trend.mjs?v=suivi-2';
+import { dayGuidance, weeklyOverview } from './guidance.mjs?v=suivi-2';
+import { calorieReview } from './adaptive-targets.mjs?v=suivi-2';
+import { prepareOffline } from './offline.mjs?v=suivi-2';
 import {
   calculateTargets, energyPlan, targetNotice, localDate, shiftDate, formatDate, aggregateEntries, knownTotal,
   summarizeDay, loadJournal, saveJournal, exportJournal, importJournal,
-} from './journal.mjs?v=ciqual-2025';
+} from './journal.mjs?v=suivi-2';
 
 const metrics = [
   { key: 'protein', label: 'Protéines', color: '#397d5b' },
   { key: 'carbs', label: 'Glucides', color: '#b78138' },
   { key: 'fat', label: 'Lipides', color: '#87639c' },
+  { key: 'fiber', label: 'Fibres', color: '#766740' },
   { key: 'water', label: 'Boissons', color: '#4782a0' },
 ];
 const pageNames = ['journal', 'historique', 'profil'];
@@ -102,13 +106,19 @@ function refreshToday() {
 
 function showPage(scroll = false) {
   const requestedPage = location.hash.slice(1);
-  const page = pageNames.includes(requestedPage) ? requestedPage : 'journal';
+  const dataPage = requestedPage === 'donnees';
+  const page = dataPage ? 'profil' : pageNames.includes(requestedPage) ? requestedPage : 'journal';
   for (const name of pageNames) $('#' + name).hidden = name !== page;
   for (const link of $$('[data-nav]')) {
     if (link.dataset.nav === page) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
-  if (scroll) window.scrollTo({ top: 0 });
+  if (dataPage) {
+    $('#backup-title').focus({ preventScroll: true });
+    $('#data-panel').scrollIntoView({ block: 'start' });
+  } else if (scroll) {
+    window.scrollTo({ top: 0 });
+  }
 }
 
 function updateMeter(meter, amount, target, partial) {
@@ -208,6 +218,64 @@ function renderSummary(entries, targets) {
   output.replaceChildren(list);
 }
 
+function renderGuidance(entries, targets, day) {
+  const confirmed = day?.complete === true;
+  const guidance = confirmed ? dayGuidance(entries, targets) : null;
+  const section = $('#guidance');
+  section.hidden = !guidance;
+  section.replaceChildren();
+  if (guidance) {
+    section.append(el('h3', '', guidance.title), el('p', 'small subtle', guidance.message));
+    if (guidance.options.length) {
+      const choices = el('ul', 'guidance-options');
+      for (const { label, detail } of guidance.options) {
+        const option = el('li');
+        option.append(el('strong', '', label), el('span', 'small subtle', detail));
+        choices.append(option);
+      }
+      section.append(choices);
+    }
+  }
+  $('#day-check').hidden = entries.length === 0;
+  $('#day-check-note').textContent = confirmed
+    ? 'Journée confirmée. Une modification des repas ou boissons la rouvre.'
+    : 'Confirme quand tu as saisi tous tes repas et boissons. Le bilan sur 7 jours se base sur les journées confirmées.';
+  $('#confirm-day').textContent = confirmed ? 'Rouvrir la journée' : 'Confirmer ma journée';
+}
+
+function renderWeeklyOverview() {
+  const { periodStart, periodEnd, recordedDays, confirmedDays, metrics: results } = weeklyOverview(journal.days, date);
+  const output = $('#weekly-overview');
+  output.replaceChildren(el('p', 'small subtle', formatDate(periodStart, { day: 'numeric', month: 'short' }) +
+    ' au ' + formatDate(periodEnd, { day: 'numeric', month: 'short' }) + ' · ' + confirmedDays + '/7 jours confirmés'));
+  if (!confirmedDays) {
+    output.append(el('p', 'small weekly-note', recordedDays
+      ? 'Confirme tes journées saisies pour voir les tendances.'
+      : 'Tes journées confirmées apparaîtront ici au fil de la semaine.'));
+    return;
+  }
+  const list = el('dl', 'weekly-metrics');
+  for (const metric of results) {
+    const row = el('div');
+    const value = metric.average == null ? 'À compléter' : number.format(metric.average) + ' ' + metric.unit + '/j';
+    const details = [metric.days + '/7 j comparables'];
+    if (metric.averageTarget != null) details.push('repère moyen ' + number.format(metric.averageTarget) + ' ' + metric.unit);
+    if (metric.belowDays > 0 && metric.key !== 'kcal') details.push(metric.belowDays + ' j sous le repère');
+    if (metric.estimatedDays > 0) details.push(metric.estimatedDays + ' j avec estimations');
+    const reading = el('dd');
+    reading.append(el('strong', '', value), el('span', 'small subtle', details.join(' · ')));
+    row.append(el('dt', '', metric.label), reading);
+    list.append(row);
+  }
+  output.append(list);
+  const repeatedGaps = results.filter(metric => metric.key !== 'kcal' && metric.days >= 3 && metric.belowDays * 2 > metric.days);
+  if (repeatedGaps.length) {
+    const labels = repeatedGaps.map(metric => metric.label.toLowerCase()).join(' et les ');
+    output.append(el('p', 'small weekly-note', 'Sur la majorité des journées comparables, les apports sont sous le repère pour les ' +
+      labels + '. Le bilan d’une journée confirmée propose des idées de portions.'));
+  }
+}
+
 function renderEntry(entry) {
   const row = el('article', 'entry-row');
   const symbol = el('span', 'tile' + (entry.kind === 'drink' ? ' blue' : ''));
@@ -233,6 +301,7 @@ function renderEntry(entry) {
         const matching = state.days[entryDate]?.entries.find(candidate => candidate.id === entry.id);
         if (!matching) throw new Error('Entrée introuvable');
         Object.assign(matching, edited);
+        delete state.days[entryDate].complete;
       });
       if (success) notify('Entrée modifiée.');
       return success;
@@ -241,6 +310,7 @@ function renderEntry(entry) {
         const day = state.days[entryDate];
         if (!day) return;
         day.entries = day.entries.filter(current => current.id !== entry.id);
+        delete day.complete;
       });
       if (success) notify('Entrée supprimée.');
       return success;
@@ -269,6 +339,33 @@ function renderJournal() {
   $('#entries').replaceChildren(...(entries.length ? [...entries].reverse().map(renderEntry) :
     [empty('Aucune entrée enregistrée pour cette journée.')]));
   renderSummary(entries, targets);
+  renderGuidance(entries, targets, day);
+  renderWeeklyOverview();
+}
+
+function renderCalorieReview() {
+  const section = $('#calorie-review');
+  section.hidden = !journal.profile;
+  if (!journal.profile) return;
+  const review = calorieReview(journal.days, localDate(), journal.profile);
+  section.replaceChildren(el('h3', '', 'Faire le point sur la cible calories'),
+    el('p', 'small subtle', review.message));
+  if (!review.suggestion) return;
+  section.append(el('p', 'small', 'Cible à examiner · ' + displayMetric('kcal', review.suggestion.kcal) + '/jour (' +
+    signed(review.suggestion.delta) + ' kcal).'));
+  const preview = button('Voir l’ajustement dans mon profil', 'button compact');
+  preview.addEventListener('click', () => {
+    location.hash = 'profil';
+    $('.advanced').open = true;
+    const control = profileForm.elements.customCalories;
+    control.value = review.suggestion.kcal;
+    control.dispatchEvent(new Event('input', { bubbles: true }));
+    requestAnimationFrame(() => {
+      control.focus();
+      control.scrollIntoView({ block: 'center' });
+    });
+  });
+  section.append(preview);
 }
 
 function renderHistory() {
@@ -304,6 +401,7 @@ function renderHistory() {
       const kcal = knownTotal(totals, 'kcal');
       const energy = kcal == null ? 'Calories à compléter' : displayMetric('kcal', kcal) + (totals.missing.kcal ? ' (partiel)' : '');
       details.push(energy, volume(totals.water) + ' de boissons');
+      if (day.complete) details.push('Journée confirmée');
     }
     if (day.weight != null) details.push(number.format(day.weight) + ' kg');
     const row = el('article', 'history-row');
@@ -321,6 +419,7 @@ function renderHistory() {
   $('#history-days').replaceChildren(...(rows.length ? rows : [empty('Les journées avec des entrées ou des pesées apparaîtront ici.')]));
   $('#more-history').hidden = recorded.length <= historyLimit;
   weightForm.elements.date.max = localDate();
+  renderCalorieReview();
 }
 
 function updateTrainingFields(selected = profileForm.elements.sportType.value) {
@@ -412,11 +511,15 @@ function renderProfileTargets(profile = journal.profile, preview = false) {
 function render() {
   renderJournal();
   renderHistory();
-  renderProfileTargets();
+  if (!profileDirty) renderProfileTargets();
 }
 
 function storeEntry(entry, entryDate) {
-  const success = updateJournal(state => { ensureDay(state, entryDate).entries.push(entry); });
+  const success = updateJournal(state => {
+    const day = ensureDay(state, entryDate);
+    day.entries.push(entry);
+    delete day.complete;
+  });
   if (success) notify(entry.kind === 'drink' ? 'Boisson enregistrée.' : 'Repas enregistré.');
   return success;
 }
@@ -457,11 +560,27 @@ $('#entry-form').addEventListener('submit', event => {
   });
 });
 
+$('#quick-entry').addEventListener('click', () => {
+  setMode('meal');
+  entryText.focus({ preventScroll: true });
+  $('#entry-panel').scrollIntoView({ block: 'start' });
+});
+$('#confirm-day').addEventListener('click', () => {
+  refreshToday();
+  const dayKey = date;
+  const success = updateJournal(state => {
+    const day = state.days[dayKey];
+    if (!day?.entries.length) throw new Error('Aucune entrée');
+    if (day.complete) delete day.complete;
+    else day.complete = true;
+  });
+  if (success) notify(journal.days[dayKey].complete ? 'Journée confirmée.' : 'Journée rouverte.');
+});
 for (const control of $$('[data-water]')) {
   control.addEventListener('click', () => {
     refreshToday();
     const grams = Number(control.dataset.water);
-    const water = { name: 'Eau', grams, unit: 'ml', estimated: false, source: '', kcal: 0, protein: 0, carbs: 0, fat: 0 };
+    const water = { name: 'Eau', grams, unit: 'ml', estimated: false, source: '', kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
     storeEntry(newEntry('drink', [water], 'Eau'), date);
   });
 }
@@ -480,11 +599,16 @@ function selectPhoto(photo) {
   if (photoUrl) photoPreview.src = photoUrl;
   else photoPreview.removeAttribute('src');
   photoAnalyze.disabled = !photo;
+  $('#clear-photo').hidden = !photo;
   photoStatus.textContent = '';
   photoResults.replaceChildren();
 }
 
 photoFile.addEventListener('change', () => selectPhoto(photoFile.files[0]));
+$('#clear-photo').addEventListener('click', () => {
+  photoFile.value = '';
+  selectPhoto(null);
+});
 $('#capture-photo').addEventListener('click', () => cameraFile.click());
 cameraFile.addEventListener('change', () => {
   const photo = cameraFile.files[0];
@@ -510,7 +634,8 @@ photoAnalyze.addEventListener('click', async () => {
       photoStatus.textContent = 'Aucun aliment reconnu avec assez de confiance. Tu peux décrire ton repas.';
       return;
     }
-    photoStatus.textContent = 'Aliments proposés · ' + suggestions.map(({ name }) => name).join(', ');
+    photoStatus.textContent = 'Aliments proposés · ' + suggestions.map(({ name }) => name).join(', ') +
+      '. Vérifie les poids et ajoute les ingrédients cachés.';
     const review = button('Vérifier les aliments et les portions', 'button filled');
     review.addEventListener('click', () => {
       refreshToday();
@@ -582,7 +707,10 @@ profileForm.addEventListener('submit', event => {
     const today = ensureDay(state, localDate());
     if (firstWeight) today.weight = profile.weight;
   });
-  if (success) profileDirty = false;
+  if (success) {
+    profileDirty = false;
+    renderProfileTargets();
+  }
   status.textContent = success ? 'Profil et repères enregistrés.' : 'Le profil n’a pas pu être enregistré.';
 });
 
@@ -621,25 +749,20 @@ function downloadBackup(file) {
   notify('Sauvegarde exportée.');
 }
 
-$('#export-data').addEventListener('click', () => {
-  try {
-    downloadBackup(backupFile());
-  } catch {
-    notify('Export impossible.');
-  }
-});
-$('#share-data').hidden = typeof navigator.share !== 'function';
-$('#share-data').addEventListener('click', async () => {
+$('#save-file').addEventListener('click', async () => {
   try {
     const file = backupFile();
     const files = [file];
-    if (!navigator.canShare?.({ files })) {
+    if (!navigator.share || !navigator.canShare?.({ files })) {
       downloadBackup(file);
       return;
     }
     await navigator.share({ files });
   } catch (error) {
-    if (error.name !== 'AbortError') notify('Partage impossible. Essaie le bouton Exporter.');
+    if (error.name !== 'AbortError') {
+      try { downloadBackup(backupFile()); }
+      catch { notify('Impossible d’enregistrer une copie sur cet appareil.'); }
+    }
   }
 });
 $('#import-data').addEventListener('click', () => $('#import-file').click());
@@ -650,7 +773,9 @@ $('#import-file').addEventListener('change', async event => {
     if (file.size > 20 * 1024 * 1024) throw new Error('La sauvegarde dépasse 20 Mo.');
     const restored = importJournal(await file.text());
     const hasData = journal.profile || Object.keys(journal.days).length;
-    if (hasData && !confirm('Remplacer le journal et le profil actuels par cette sauvegarde ?')) return;
+    const days = Object.keys(restored.days).length;
+    if (hasData && !confirm('Cette copie contient ' + days + ' ' + (days === 1 ? 'journée' : 'journées') +
+      '. Remplacer le journal et le profil actuels par cette copie ?')) return;
     restoreJournal(restored);
     cloudBackup.changed();
     notify('Sauvegarde importée.');
@@ -666,13 +791,12 @@ function showBackupStatus({ connected, blocked, busy, phase, message }) {
   const indicator = $('#backup-indicator');
   status.textContent = message;
   status.classList.toggle('error', phase === 'error');
-  indicator.hidden = !connected;
   indicator.textContent = {
     saved: 'Sauvegardé sur GitHub',
     pending: blocked ? 'Sauvegarde à vérifier' : 'Sauvegarde en attente',
     working: 'Sauvegarde en cours…',
     error: 'Sauvegarde à vérifier',
-  }[phase] ?? '';
+  }[phase] ?? 'Sauvegarde';
   $('#backup-setup').hidden = connected;
   $('#backup-controls').hidden = !connected;
   $('#backup-now').hidden = blocked;
@@ -729,3 +853,11 @@ populateProfile();
 render();
 showPage();
 void cloudBackup.initialize();
+void prepareOffline({
+  status: $('#offline-status'),
+  notice: $('#app-update'),
+  activate: $('#install-update'),
+  canReload: () => !profileDirty && !entryText.value.trim() && !selectedPhoto && !$('#entry-dialog').open &&
+    !weightForm.elements.weight.value && !backupForm.elements.token.value && !backupForm.elements.password.value,
+  warn: () => notify('Enregistre ou ferme la saisie en cours avant la mise à jour.'),
+});

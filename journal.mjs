@@ -2,7 +2,9 @@ import { SPORT_OPTIONS, sportCaloriesPerDay, sportMet } from './activity.mjs';
 import { proteinPlan } from './protein-targets.mjs';
 
 const JOURNAL_KEY = 'assiette-journal-v1';
-const NUTRIENTS = { kcal: 1000, protein: 100, carbs: 100, fat: 100 };
+const NUTRIENTS = { kcal: 1000, protein: 100, carbs: 100, fat: 100, fiber: 100 };
+const NUTRIENT_NAMES = Object.keys(NUTRIENTS);
+const FIBER_REFERENCE_GRAMS = 30; // Anses, repère de la population adulte.
 const ACTIVITY_FACTORS = { 'mostly-seated': 1.4, 'on-feet': 1.6, physical: 1.8, 'very-physical': 2 };
 // Henry (2005), table 15. MJ/day from body weight (kg) and height (m).
 const HENRY = {
@@ -140,6 +142,7 @@ export function calculateTargets(profile) {
     protein: ranges.protein[0],
     carbs: ranges.carbs[0],
     fat: ranges.fat[0],
+    fiber: FIBER_REFERENCE_GRAMS,
     water: Math.round((water ?? 1.5) * 1000),
     ranges,
     ...(protein?.goal != null ? { proteinGoal: protein.goal } : {}),
@@ -181,8 +184,8 @@ function isPlainWater(item) {
 }
 
 export function aggregateEntries(entries) {
-  const missing = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
-  const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, water: 0, plainWater: 0, estimated: 0, unknown: 0,
+  const missing = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+  const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, water: 0, plainWater: 0, estimated: 0, unknown: 0,
     entries: entries.length, items: 0, missing };
   for (const entry of entries) {
     for (const item of entry.items) {
@@ -194,12 +197,12 @@ export function aggregateEntries(entries) {
         if (isPlainWater(item)) totals.plainWater += item.grams;
       }
       let hasMissingNutrient = false;
-      for (const nutrient of Object.keys(NUTRIENTS)) {
+      for (const nutrient of NUTRIENT_NAMES) {
         if (hasQuantity && Number.isFinite(item[nutrient])) {
           totals[nutrient] += item[nutrient] * item.grams / 100;
         } else {
           missing[nutrient] += 1;
-          hasMissingNutrient = true;
+          if (nutrient !== 'fiber') hasMissingNutrient = true;
         }
       }
       if (hasMissingNutrient) totals.unknown += 1;
@@ -282,12 +285,14 @@ function normalizeProfile(profile) {
 function normalizeTargets(targets) {
   if (targets == null) return null;
   if (!isRecord(targets)) throw new Error('Les repères de la journée sont invalides.');
-  const { kcal, protein, carbs, fat, water } = targets;
+  const { kcal, protein, carbs, fat, water, fiber } = targets;
   if (!isBetween(kcal, 1, 50000) || !isBetween(protein, 1, 2500) ||
-      !isBetween(carbs, 1, 7500) || !isBetween(fat, 1, 2300) || !isBetween(water, 500, 6000)) {
+      !isBetween(carbs, 1, 7500) || !isBetween(fat, 1, 2300) || !isBetween(water, 500, 6000) ||
+      !isOptional(fiber, 1, 100)) {
     throw new Error('Les repères de la journée sont invalides.');
   }
   const normalized = { kcal, protein, carbs, fat, water };
+  if (fiber != null) normalized.fiber = fiber;
   if (targets.ranges == null && targets.proteinGoal == null) return normalized;
   if (!isRecord(targets.ranges)) throw new Error('Les fourchettes de la journée sont invalides.');
   const ranges = {};
@@ -318,8 +323,11 @@ function normalizeItem(item) {
     source: typeof item.source === 'string' ? item.source : '',
   };
   if (typeof item.query === 'string') normalized.query = item.query;
+  if (typeof item.barcode === 'string' && /^\d{8,14}$/.test(item.barcode)) normalized.barcode = item.barcode;
   for (const [nutrient, max] of Object.entries(NUTRIENTS)) {
     if (!isOptional(item[nutrient], 0, max)) throw new Error('Une valeur nutritionnelle est invalide.');
+    // An absent fibre value stays compatible with exports from before it was tracked.
+    if (nutrient === 'fiber' && item.fiber == null) continue;
     normalized[nutrient] = item[nutrient] ?? null;
   }
   return normalized;
@@ -342,7 +350,8 @@ function normalizeJournal(state) {
   const profile = normalizeProfile(state.profile);
   const days = {};
   for (const [dateKey, day] of Object.entries(state.days)) {
-    if (!dateFromKey(dateKey) || !isRecord(day) || !Array.isArray(day.entries) || !isOptional(day.weight, 25, 350)) {
+    if (!dateFromKey(dateKey) || !isRecord(day) || !Array.isArray(day.entries) || !isOptional(day.weight, 25, 350) ||
+        (day.complete != null && typeof day.complete !== 'boolean')) {
       throw new Error('Une journée du journal est invalide.');
     }
     const entries = day.entries.map(normalizeEntry);
@@ -351,6 +360,7 @@ function normalizeJournal(state) {
     }
     days[dateKey] = { entries, targets: normalizeTargets(day.targets) };
     if (day.weight != null) days[dateKey].weight = day.weight;
+    if (day.complete === true) days[dateKey].complete = true;
   }
   return { profile, days };
 }

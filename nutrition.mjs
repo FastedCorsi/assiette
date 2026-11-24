@@ -1,5 +1,5 @@
 import { photoFoods, photoDrinks } from './photo-foods.mjs';
-import { findCiqualFood } from './ciqual-search.mjs';
+import { findCiqualFood, findCiqualFoodByCode } from './ciqual-search.mjs?v=suivi-2';
 
 // Anses, Table Ciqual 2025, DOI 10.57745/RDMHWY, Licence ouverte Etalab 2.0.
 // Each row records the Ciqual ID, display name, serving size, kcal, protein, carbs,
@@ -180,7 +180,8 @@ const catalog = new Map();
 for (const [entries, unit] of [[foods, 'g'], [drinks, 'ml']]) {
   for (const [id, name, serving, kcal, protein, carbs, fat, aliases, piece = serving] of entries) {
     const source = typeof id === 'number' ? 'Ciqual 2025' : 'Exemple générique · Open Food Facts';
-    const entry = { name, serving, piece, unit, kcal, protein, carbs, fat, source };
+    const fiber = findCiqualFoodByCode(id)?.fiber ?? null;
+    const entry = { name, serving, piece, unit, kcal, protein, carbs, fat, fiber, source };
     for (const alias of [name, ...aliases.split('|')].filter(Boolean)) catalog.set(normalize(alias), entry);
   }
 }
@@ -286,6 +287,7 @@ function parseItem(text, isDrink) {
     protein: nutrition?.protein ?? null,
     carbs: nutrition?.carbs ?? null,
     fat: nutrition?.fat ?? null,
+    fiber: nutrition?.fiber ?? null,
     source: nutrition ? `${nutrition.source}${inferredUnit === 'ml' && !isOil ? ' · ≈ 1 g/ml' : ''}` : 'À renseigner',
   };
 }
@@ -318,6 +320,7 @@ function formatProduct(product) {
   const brands = typeof product.brands === 'string' ? product.brands.split(',').map(value => value.trim()).filter(Boolean) : [];
   const brand = brands.find(value => !normalize(name).includes(normalize(value)));
   const code = String(product.code ?? '');
+  const barcode = /^\d{8,14}$/.test(code) ? code : null;
   const nutrients = product.nutriments ?? {};
   const kcal = nutrient(nutrients['energy-kcal_100g'], 1000);
   const kilojoules = nutrient(nutrients['energy-kj_100g'], 4184);
@@ -327,8 +330,10 @@ function formatProduct(product) {
     protein: nutrient(nutrients.proteins_100g, 100),
     carbs: nutrient(nutrients.carbohydrates_100g, 100),
     fat: nutrient(nutrients.fat_100g, 100),
+    fiber: nutrient(nutrients.fiber_100g, 100),
     source: 'Open Food Facts',
-    url: /^\d{8,14}$/.test(code) ? `https://world.openfoodfacts.org/product/${code}` : '',
+    barcode,
+    url: barcode ? `https://world.openfoodfacts.org/product/${barcode}` : '',
     unit: productUnit(product),
   };
 }
@@ -358,5 +363,5 @@ export async function lookupProducts(query, signal) {
   const result = await response.json();
   const products = isBarcode ? [result.product] : result.products ?? [];
   return products.filter(Boolean).map(formatProduct).filter(product => product &&
-    [product.kcal, product.protein, product.carbs, product.fat].some(value => value !== null)).slice(0, 8);
+    [product.kcal, product.protein, product.carbs, product.fat, product.fiber].some(value => value !== null)).slice(0, 8);
 }

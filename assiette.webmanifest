@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "Assiette · Journal nutritionnel",
+  "short_name": "Assiette",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#f4f6f1",
+  "background_color": "#f4f6f1",
+  "icons": [
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "./icon-180.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
