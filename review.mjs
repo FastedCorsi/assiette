@@ -1,6 +1,6 @@
 import { $, el, icon, button, number } from './ui.mjs';
 import { aggregateEntries, formatDate } from './journal.mjs';
-import { lookupProducts } from './nutrition.mjs';
+import { lookupProducts, parseMeal } from './nutrition.mjs';
 
 const dialog = $('#entry-dialog');
 const reviewForm = $('#review-form');
@@ -29,8 +29,11 @@ function input(type, value, attributes = {}) {
 
 function renderTotal() {
   const totals = aggregateEntries([draft.entry]);
-  reviewTotal.textContent = number.format(Math.round(totals.kcal)) + ' kcal' +
-    (totals.missing.kcal ? ' · total partiel' : '');
+  const values = [number.format(Math.round(totals.kcal)) + ' kcal',
+    number.format(totals.protein) + ' g prot.',
+    number.format(totals.carbs) + ' g gluc.',
+    number.format(totals.fat) + ' g lip.'];
+  reviewTotal.textContent = values.join(' · ') + (totals.unknown ? ' · total partiel' : '');
   saveButton.disabled = !draft.entry.items.length;
 }
 
@@ -134,6 +137,7 @@ function itemEditor(item, index) {
   const detailTitle = el('summary');
   const nutrientFields = el('div', 'nutrient-fields');
   const nutrientInputs = {};
+  let referenceName = item.name.trim();
 
   function refreshMetadata() {
     detailTitle.textContent = 'Valeurs pour 100 ' + item.unit;
@@ -153,6 +157,16 @@ function itemEditor(item, index) {
     item.name = name.value;
     item.query = name.value;
     name.setCustomValidity(name.value.trim() ? '' : 'Renseigne le nom de l’ingrédient.');
+  });
+  name.addEventListener('change', () => {
+    if (item.name.trim() === referenceName || !item.source.startsWith('Photo · ')) return;
+    referenceName = item.name.trim();
+    const matches = parseMeal(referenceName);
+    const replacement = matches.length === 1 && matches[0].unit === item.unit ? matches[0] : null;
+    for (const key of Object.keys(nutrients)) item[key] = replacement?.[key] ?? null;
+    item.source = 'Photo · ' + (replacement?.source || 'À renseigner');
+    refresh();
+    renderTotal();
   });
   quantity.addEventListener('input', () => {
     item.grams = quantity.valueAsNumber || null;
@@ -190,6 +204,7 @@ function itemEditor(item, index) {
   details.append(detailTitle, nutrientFields);
   editor.append(el('legend', '', 'Ingrédient ' + (index + 1)), fields, metadata, details, productLookup(item, () => {
     name.setCustomValidity('');
+    referenceName = item.name.trim();
     refresh();
   }));
   refresh();

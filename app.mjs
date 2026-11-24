@@ -1,6 +1,7 @@
 import { $, $$, el, icon, button, empty, number, volume } from './ui.mjs';
 import { parseMeal } from './nutrition.mjs';
 import { openReview } from './review.mjs';
+import { createBackupSync } from './backup-sync.mjs';
 import {
   calculateTargets, targetNotice, localDate, shiftDate, formatDate, aggregateEntries,
   summarizeDay, loadJournal, saveJournal, exportJournal, importJournal,
@@ -23,6 +24,7 @@ const photoAnalyze = $('#photo-analyze');
 const photoStatus = $('#photo-status');
 const photoResults = $('#photo-results');
 const weightForm = $('#weight-form');
+const backupForm = $('#backup-form');
 let journal = { profile: null, days: {} };
 let date = localDate();
 let lastToday = date;
@@ -56,11 +58,19 @@ function updateJournal(change) {
     saveJournal(latest);
     journal = latest;
     render();
+    cloudBackup.changed();
     return true;
   } catch {
     notify('Enregistrement impossible. Vérifie le stockage du navigateur.');
     return false;
   }
+}
+
+function restoreJournal(restored) {
+  saveJournal(restored);
+  journal = restored;
+  populateProfile();
+  render();
 }
 
 function ensureDay(state, dayKey) {
@@ -401,24 +411,43 @@ photoAnalyze.addEventListener('click', async () => {
   photoResults.replaceChildren();
   photoStatus.textContent = 'Préparation de l’analyse…';
   try {
-    const { analyzePhoto } = await import('./vision.mjs');
+    const { analyzePhoto } = await import('./plate-vision.mjs');
     const suggestions = await analyzePhoto(file, status => {
       if (file === selectedPhoto) photoStatus.textContent = status;
     });
     if (file !== selectedPhoto) return;
-    photoStatus.textContent = suggestions.length ? 'Choisis la suggestion la plus proche ou décris ton repas.' : 'Pas de suggestion suffisamment fiable. Tu peux décrire ton repas.';
-    const choices = el('div', 'photo-options');
-    for (const { name } of suggestions) {
-      const option = button(name, 'button compact');
-      option.addEventListener('click', () => {
-        const existing = entryText.value.trim();
-        entryText.value = existing ? name + ', ' + existing : name;
-        setMode('meal');
-        entryText.focus();
-      });
-      choices.append(option);
+    if (!suggestions.length) {
+      photoStatus.textContent = 'Aucun aliment reconnu avec assez de confiance. Tu peux décrire ton repas.';
+      return;
     }
-    photoResults.append(choices);
+    photoStatus.textContent = 'Aliments proposés · ' + suggestions.map(({ name }) => name).join(', ');
+    const review = button('Vérifier les aliments et les portions', 'button filled');
+    review.addEventListener('click', () => {
+      refreshToday();
+      const photoDate = date;
+      const description = entryText.value;
+      const manualItems = parseMeal(description);
+      const manualNames = new Set(manualItems.map(item => item.name.toLocaleLowerCase('fr')));
+      const photoItems = suggestions.flatMap(({ name, grams }) => parseMeal(name)
+        .filter(item => !manualNames.has(item.name.toLocaleLowerCase('fr')))
+        .map(item => ({
+          ...item,
+          name,
+          grams: Number.isFinite(grams) && grams > 0 ? grams : item.grams,
+          estimated: true,
+          source: 'Photo · ' + (item.name === name ? '' : 'Réf. ' + item.name + ' · ') + item.source,
+        })));
+      openReview(newEntry('meal', [...photoItems, ...manualItems], 'Repas'), photoDate, entry => {
+        const success = storeEntry(entry, photoDate);
+        if (success) {
+          if (description === entryText.value) entryText.value = '';
+          photoFile.value = '';
+          selectPhoto(null);
+        }
+        return success;
+      });
+    });
+    photoResults.append(review);
   } catch (error) {
     if (file === selectedPhoto) photoStatus.textContent = (error.message || 'Analyse indisponible.') + ' Tu peux décrire ton repas à la main.';
   } finally {
@@ -470,17 +499,39 @@ weightForm.addEventListener('submit', event => {
 });
 $('#more-history').addEventListener('click', () => { historyLimit += 14; renderHistory(); });
 
+function backupFile() {
+  return new File([exportJournal(journal)], 'assiette-' + localDate() + '.json', { type: 'application/json' });
+}
+
+function downloadBackup(file) {
+  const url = URL.createObjectURL(file);
+  const link = el('a');
+  link.href = url;
+  link.download = file.name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  notify('Sauvegarde exportée.');
+}
+
 $('#export-data').addEventListener('click', () => {
   try {
-    const url = URL.createObjectURL(new Blob([exportJournal(journal)], { type: 'application/json' }));
-    const link = el('a');
-    link.href = url;
-    link.download = 'assiette-' + localDate() + '.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    notify('Sauvegarde exportée.');
+    downloadBackup(backupFile());
   } catch {
     notify('Export impossible.');
+  }
+});
+$('#share-data').hidden = typeof navigator.share !== 'function';
+$('#share-data').addEventListener('click', async () => {
+  try {
+    const file = backupFile();
+    const files = [file];
+    if (!navigator.canShare?.({ files })) {
+      downloadBackup(file);
+      return;
+    }
+    await navigator.share({ files });
+  } catch (error) {
+    if (error.name !== 'AbortError') notify('Partage impossible. Essaie le bouton Exporter.');
   }
 });
 $('#import-data').addEventListener('click', () => $('#import-file').click());
@@ -492,10 +543,8 @@ $('#import-file').addEventListener('change', async event => {
     const restored = importJournal(await file.text());
     const hasData = journal.profile || Object.keys(journal.days).length;
     if (hasData && !confirm('Remplacer le journal et le profil actuels par cette sauvegarde ?')) return;
-    saveJournal(restored);
-    journal = restored;
-    populateProfile();
-    render();
+    restoreJournal(restored);
+    cloudBackup.changed();
     notify('Sauvegarde importée.');
   } catch (error) {
     notify('Import impossible. ' + (error.message || 'Vérifie le fichier.'));
@@ -503,6 +552,46 @@ $('#import-file').addEventListener('change', async event => {
     event.target.value = '';
   }
 });
+
+function showBackupStatus({ connected, blocked, busy, phase, message }) {
+  const status = $('#backup-status');
+  const indicator = $('#backup-indicator');
+  status.textContent = message;
+  status.classList.toggle('error', phase === 'error');
+  indicator.hidden = !connected;
+  indicator.textContent = {
+    saved: 'Sauvegardé sur GitHub',
+    pending: blocked ? 'Sauvegarde à vérifier' : 'Sauvegarde en attente',
+    working: 'Sauvegarde en cours…',
+    error: 'Sauvegarde à vérifier',
+  }[phase] ?? '';
+  $('#backup-setup').hidden = connected;
+  $('#backup-controls').hidden = !connected;
+  $('#backup-now').hidden = blocked;
+  $('#backup-local').hidden = !blocked;
+  backupForm.querySelector('button[type=submit]').disabled = busy;
+  for (const control of $$('#backup-controls button')) control.disabled = busy;
+  if (connected) backupForm.reset();
+}
+
+const cloudBackup = createBackupSync({ getJournal: loadJournal, restoreJournal, report: showBackupStatus });
+backupForm.addEventListener('submit', event => {
+  event.preventDefault();
+  void cloudBackup.connect(backupForm.elements.token.value.trim(), backupForm.elements.password.value);
+});
+$('#backup-now').addEventListener('click', () => { void cloudBackup.sync(); });
+$('#backup-restore').addEventListener('click', () => {
+  const hasData = journal.profile || Object.keys(journal.days).length;
+  if (!hasData || confirm('Remplacer le journal et le profil de cet appareil par la copie GitHub ?')) {
+    void cloudBackup.restore();
+  }
+});
+$('#backup-local').addEventListener('click', () => {
+  if (confirm('Sauvegarder le journal de cet appareil comme dernière version sur GitHub ?')) {
+    void cloudBackup.keepLocal();
+  }
+});
+$('#backup-disconnect').addEventListener('click', () => { void cloudBackup.disconnect(); });
 
 $('#previous-day').addEventListener('click', () => chooseDate(shiftDate(date, -1)));
 $('#next-day').addEventListener('click', () => chooseDate(shiftDate(date, 1)));
@@ -514,10 +603,15 @@ window.addEventListener('storage', event => {
   readJournal();
   if (!profileDirty) populateProfile();
   render();
+  cloudBackup.changed();
 });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) refreshToday();
+  if (!document.hidden) {
+    refreshToday();
+    cloudBackup.changed();
+  }
 });
+window.addEventListener('online', () => { void cloudBackup.sync(); });
 window.addEventListener('focus', refreshToday);
 setInterval(refreshToday, 30000);
 
@@ -526,3 +620,4 @@ readJournal();
 populateProfile();
 render();
 showPage();
+void cloudBackup.initialize();

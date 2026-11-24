@@ -49,6 +49,7 @@
         <div>
           <h1 id="journal-title">Mon journal</h1>
           <p id="day-caption" class="subtle"></p>
+          <a id="backup-indicator" href="#profil" hidden></a>
         </div>
         <div class="date-controls" aria-label="Changer de journée">
           <button type="button" class="icon-button" id="previous-day" aria-label="Jour précédent"><svg><use href="#i-left"/></svg></button>
@@ -92,7 +93,7 @@
                 <input id="photo-file" type="file" accept="image/*">
                 <input id="camera-file" type="file" accept="image/*" capture="environment" hidden>
                 <button id="capture-photo" class="button compact" type="button"><svg><use href="#i-camera"/></svg> Ouvrir la caméra</button>
-                <p class="subtle small">Le modèle propose des plats possibles. Tu choisis le plat et confirmes la portion. Le premier essai télécharge le modèle, puis la photo est analysée sur cet appareil.</p>
+                <p class="subtle small">Assiette repère les aliments visibles et propose des portions. Le premier essai télécharge environ 30 Mo. La photo est analysée sur cet appareil.</p>
                 <img id="photo-preview" hidden alt="Aperçu de la photo sélectionnée">
                 <button id="photo-analyze" class="button filled" type="button" disabled><svg><use href="#i-spark"/></svg> Analyser la photo</button>
                 <div id="photo-status" class="subtle small" role="status"></div>
@@ -180,9 +181,33 @@
           </section>
           <section class="panel" aria-labelledby="backup-title">
             <div class="section-head"><h2 id="backup-title">Mes données</h2></div>
-            <p class="subtle">Le profil et le journal restent dans ce navigateur. Exporte une copie pour conserver tes données ou les transférer.</p>
-            <div class="backup-actions"><button class="button" type="button" id="export-data">Exporter</button><button class="button" type="button" id="import-data">Importer</button></div>
+            <p class="subtle">Le journal s’enregistre sur cet appareil. Pour garder une copie ailleurs, utilise la sauvegarde GitHub ou enregistre un fichier dans iCloud Drive.</p>
+            <div class="backup-actions">
+              <button class="button" type="button" id="export-data">Exporter</button>
+              <button class="button" type="button" id="share-data" hidden>Enregistrer dans Fichiers</button>
+              <button class="button" type="button" id="import-data">Importer</button>
+            </div>
             <input type="file" id="import-file" accept=".json,application/json" hidden>
+            <div class="backup-panel">
+              <h3>Sauvegarde automatique sur GitHub</h3>
+              <p id="backup-status" class="small subtle" role="status">Journal enregistré sur cet appareil.</p>
+              <details id="backup-setup">
+                <summary>Configurer la sauvegarde</summary>
+                <form id="backup-form" autocomplete="off">
+                  <p class="small subtle">Sur GitHub, choisis <strong>Only select repositories</strong>, puis le dépôt privé <strong>assiette-sauvegarde</strong>. Vérifie que <strong>Contents</strong> est en <strong>Read and write</strong>. Garde ton mot de passe de sauvegarde dans ton gestionnaire de mots de passe pour restaurer le journal sur un autre iPhone.</p>
+                  <a class="button compact" href="https://github.com/settings/personal-access-tokens/new?name=Assiette+Sauvegarde&amp;target_name=FastedCorsi&amp;expires_in=90&amp;contents=write" target="_blank" rel="noopener noreferrer">Créer le jeton sur GitHub</a>
+                  <label class="field">Jeton GitHub<input name="token" type="password" placeholder="github_pat_…" required spellcheck="false" autocapitalize="off" autocorrect="off"></label>
+                  <label class="field">Mot de passe de sauvegarde<input name="password" type="password" minlength="12" maxlength="1024" placeholder="Au moins 12 caractères" required spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="new-password"></label>
+                  <button class="button filled" type="submit">Activer la sauvegarde</button>
+                </form>
+              </details>
+              <div id="backup-controls" class="backup-actions" hidden>
+                <button id="backup-now" class="button compact" type="button">Sauvegarder maintenant</button>
+                <button id="backup-restore" class="button compact" type="button">Restaurer la copie GitHub</button>
+                <button id="backup-local" class="button compact" type="button" hidden>Garder le journal de cet appareil</button>
+                <button id="backup-disconnect" class="button text-button compact" type="button">Déconnecter</button>
+              </div>
+            </div>
           </section>
         </div>
       </div>

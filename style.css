@@ -48,6 +48,7 @@ p { line-height: 1.5; }
 .local-label::before { display: inline-block; content: ""; width: .42rem; height: .42rem; background: #3d7759; border-radius: 50%; margin: 0 .45rem .1rem 0; }
 .page-head { margin: 2.5rem 0 1.45rem; display: flex; justify-content: space-between; align-items: end; gap: .9rem 1.5rem; flex-wrap: wrap; }
 .page-head p { margin-top: .45rem; }
+#backup-indicator { display: inline-block; margin-top: .28rem; font-size: .84rem; }
 .date-controls { display: flex; align-items: center; gap: .28rem; flex-wrap: wrap; }
 .date-controls input { width: auto; max-width: 100%; }
 .icon-button { display: inline-grid; place-items: center; width: 2.45rem; height: 2.45rem; flex: none; border: 1px solid var(--border); border-radius: .62rem; background: var(--surface); color: var(--forest); }
@@ -128,7 +129,6 @@ textarea { padding: .7rem; min-height: 4.8rem; resize: vertical; font-size: 1rem
 #capture-photo { display: none; margin: 0 0 .55rem; }
 @media (pointer: coarse) { #capture-photo { display: inline-flex; } }
 #photo-status:not(:empty) { margin-top: .45rem; }
-.photo-options { display: flex; flex-wrap: wrap; gap: .4rem; }
 
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
 .advanced { margin: 1.1rem 0 .65rem; border: 1px solid var(--border); border-radius: .62rem; padding: .65rem .75rem; }
@@ -142,6 +142,10 @@ summary { cursor: pointer; font-size: .9rem; color: var(--forest); font-weight: 
 .target-list dd { font-weight: 680; margin: 0; }
 .target-notice { margin-top: .6rem; }
 .backup-actions, .weight-form { margin-top: .85rem; }
+.backup-panel { margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--border); }
+.backup-panel > p { margin: .35rem 0 .5rem; }
+#backup-form { display: grid; gap: .6rem; margin-top: .55rem; }
+#backup-form > .button { justify-self: start; }
 .weight-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .75fr); gap: .75rem; }
 .weight-form button { grid-column: 1 / -1; justify-self: start; }
 .weight-current { font-size: 1.8rem; letter-spacing: -.055em; }

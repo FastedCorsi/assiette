@@ -1,3 +1,5 @@
+import { photoFoods, photoDrinks } from './photo-foods.mjs';
+
 // Anses, Table Ciqual 2025, DOI 10.57745/RDMHWY, Licence ouverte Etalab 2.0.
 // Each row records the Ciqual ID, display name, serving size, kcal, protein, carbs,
 // fat and search aliases. Values are per 100 g. Trace values are rounded to zero;
@@ -135,6 +137,7 @@ const foods = [
   [25428, 'Kebab en pita', 250, 232, 15.2, 17, 10.9, 'kebab|sandwich kebab|sandwich grec'],
   [4032, 'Frites', 120, 258, 3.28, 32.7, 11.9, 'portion de frites'],
   [4030, 'Frites au four', 120, 213, 3.75, 32.6, 6.6, ''],
+  ...photoFoods,
 ];
 
 const drinks = [
@@ -156,6 +159,7 @@ const drinks = [
   [5001, 'Bière 4–5 %', 330, 39, 0.39, 3.12, 0, 'bière|bières|bière blonde'],
   [5030, 'Bière sans alcool', 330, 29.4, 0.2, 6.08, 0.053, ''],
   [5214, 'Vin rouge', 120, 75.7, 0.16, 0, 0.25, ''],
+  ...photoDrinks,
 ];
 
 function normalize(value) {
