@@ -2,6 +2,7 @@ import { $, $$, el, icon, button, empty, number, volume } from './ui.mjs';
 import { parseMeal } from './nutrition.mjs';
 import { openReview } from './review.mjs';
 import { createBackupSync } from './backup-sync.mjs';
+import { SPORT_OPTIONS, sportCaloriesPerDay, sportMet } from './activity.mjs';
 import {
   calculateTargets, targetNotice, localDate, shiftDate, formatDate, aggregateEntries,
   summarizeDay, loadJournal, saveJournal, exportJournal, importJournal,
@@ -55,6 +56,8 @@ function updateJournal(change) {
   try {
     const latest = loadJournal();
     change(latest);
+    const today = latest.days[localDate()];
+    if (today && latest.profile) today.targets = calculateTargets(latest.profile);
     saveJournal(latest);
     journal = latest;
     render();
@@ -122,22 +125,32 @@ function displayMetric(key, amount) {
   return number.format(amount) + ' g';
 }
 
+function displayTarget(key, targets) {
+  const range = targets.ranges?.[key];
+  if (!range) return displayMetric(key, targets[key]);
+  if (key === 'water') return number.format(range[0] / 1000) + '–' + number.format(range[1] / 1000) + ' L';
+  return number.format(range[0]) + '–' + number.format(range[1]) + ' g';
+}
+
 function metricCard(metric, totals, targets) {
   const { key, label, color } = metric;
   const card = el('section', 'macro-card');
-  const title = el('h2', 'macro-label', label);
+  const countsPlainWater = key === 'water' && Boolean(targets?.ranges?.water);
+  const title = el('h2', 'macro-label', countsPlainWater ? 'Eau' : label);
   const value = el('div', 'macro-value');
-  const measured = el('strong', '', displayMetric(key, totals[key]));
+  const amount = countsPlainWater ? totals.plainWater : totals[key];
+  const measured = el('strong', '', displayMetric(key, amount));
   const target = targets?.[key];
   const isPartial = Boolean(totals.missing[key]);
   card.style.setProperty('--track-fill', color);
-  value.append(measured, el('span', '', (target ? ' / ' + displayMetric(key, target) : '') + (isPartial ? ' · partiel' : '')));
+  value.append(measured, el('span', '', (target ? ' / ' + displayTarget(key, targets) : '') + (isPartial ? ' · partiel' : '')));
   const meter = el('div', 'meter');
   meter.setAttribute('role', 'progressbar');
-  meter.setAttribute('aria-label', 'Progression ' + label.toLowerCase());
+  meter.setAttribute('aria-label', 'Progression ' + title.textContent.toLowerCase());
   meter.append(el('span'));
-  updateMeter(meter, totals[key], target, isPartial);
+  updateMeter(meter, amount, target, isPartial);
   card.append(title, value, meter);
+  if (countsPlainWater) card.append(el('p', 'subtle macro-note', volume(totals.water) + ' de boissons au total'));
   return card;
 }
 
@@ -229,7 +242,8 @@ function renderJournal() {
   const entries = day?.entries ?? [];
   const targets = date === today ? calculateTargets(journal.profile) ?? day?.targets : day?.targets;
   const totals = aggregateEntries(entries);
-  $('#day-caption').textContent = (date === today ? 'Aujourd’hui, ' : '') + formatDate(date);
+  $('#day-caption').textContent = (date === today ? 'Aujourd’hui, ' : '') + formatDate(date) +
+    (date !== today && targets && !targets.ranges ? ' · Repères historiques' : '');
   dayPicker.value = date;
   dayPicker.max = today;
   $('#previous-day').disabled = date <= '1900-01-01';
@@ -289,16 +303,36 @@ function renderHistory() {
   weightForm.elements.date.max = localDate();
 }
 
+function updateTrainingFields(selected = profileForm.elements.sportType.value) {
+  const typedAge = profileForm.elements.age.valueAsNumber;
+  const age = typedAge >= 18 && typedAge <= 110 ? typedAge : journal.profile?.age ?? 30;
+  const type = profileForm.elements.sportType;
+  const other = el('option', '', age < 19 ? 'Valeurs disponibles à partir de 19 ans' : 'Choisir une activité');
+  other.value = '';
+  type.replaceChildren(other);
+  for (const [id, item] of Object.entries(SPORT_OPTIONS)) {
+    if (sportMet(age, id) == null) continue;
+    const option = el('option', '', item.label);
+    option.value = id;
+    type.append(option);
+  }
+  type.value = [...type.options].some(option => option.value === selected) ? selected : '';
+  const active = profileForm.elements.sport.valueAsNumber > 0;
+  $('#training-fields').hidden = !active;
+  type.disabled = !active || age < 19;
+  profileForm.elements.sportMinutes.disabled = type.disabled;
+}
+
 function populateProfile() {
   profileForm.reset();
   profileDirty = false;
   const profile = journal.profile;
   $('.advanced').open = profile?.customCalories != null || profile?.water != null;
-  if (!profile) return;
-  for (const [key, value] of Object.entries(profile)) {
+  for (const [key, value] of Object.entries(profile ?? {})) {
     const field = profileForm.elements.namedItem(key);
     if (field && value != null) field.value = value;
   }
+  updateTrainingFields(profile?.sportType ?? '');
 }
 
 function renderProfileTargets() {
@@ -311,11 +345,16 @@ function renderProfileTargets() {
   const list = el('dl', 'target-list');
   for (const metric of [{ key: 'kcal', label: 'Énergie' }, ...metrics]) {
     const row = el('div');
-    row.append(el('dt', '', metric.label), el('dd', '', displayMetric(metric.key, targets[metric.key])));
+    const label = metric.key === 'water' && targets.ranges?.water ? 'Eau' : metric.label;
+    row.append(el('dt', '', label), el('dd', '', displayTarget(metric.key, targets)));
     list.append(row);
   }
   output.replaceChildren(list);
-  const notice = targetNotice(journal.profile);
+  const sportEnergy = sportCaloriesPerDay(journal.profile);
+  if (sportEnergy > 0 && journal.profile.customCalories == null) {
+    output.append(el('p', 'small subtle target-notice', 'Sport compté · environ ' + displayMetric('kcal', sportEnergy) + ' par jour en moyenne.'));
+  }
+  const notice = targetNotice(journal.profile, targets);
   if (notice) output.append(el('p', 'small subtle target-notice', notice));
 }
 
@@ -456,14 +495,18 @@ photoAnalyze.addEventListener('click', async () => {
 });
 
 profileForm.addEventListener('input', () => { profileDirty = true; });
+for (const field of ['age', 'sport']) {
+  profileForm.elements[field].addEventListener('input', () => updateTrainingFields());
+}
 profileForm.addEventListener('submit', event => {
   event.preventDefault();
   refreshToday();
   const profile = Object.fromEntries(new FormData(profileForm));
   profile.name = profile.name.trim();
-  for (const field of ['age', 'height', 'weight', 'sport', 'goalWeight', 'water', 'customCalories']) {
-    profile[field] = profile[field] === '' ? null : Number(profile[field]);
+  for (const field of ['age', 'height', 'weight', 'sport', 'sportMinutes', 'goalWeight', 'water', 'customCalories']) {
+    profile[field] = profile[field] == null || profile[field] === '' ? null : Number(profile[field]);
   }
+  profile.sportType ||= null;
   const targets = calculateTargets(profile);
   const status = $('#profile-status');
   if (!targets) { status.textContent = 'Vérifie les informations saisies.'; return; }
@@ -471,7 +514,6 @@ profileForm.addEventListener('submit', event => {
     const firstWeight = state.profile?.weight !== profile.weight || Object.values(state.days).every(day => day.weight == null);
     state.profile = profile;
     const today = ensureDay(state, localDate());
-    today.targets = targets;
     if (firstWeight) today.weight = profile.weight;
   });
   if (success) profileDirty = false;
@@ -488,7 +530,7 @@ weightForm.addEventListener('submit', event => {
     const newerWeighIn = Object.entries(state.days).some(([key, day]) => key > dayKey && day.weight != null);
     if (!newerWeighIn && state.profile) {
       state.profile.weight = weight;
-      ensureDay(state, localDate()).targets = calculateTargets(state.profile);
+      ensureDay(state, localDate());
     }
   });
   if (success) {

@@ -159,14 +159,21 @@
               <label class="field">Poids actuel (kg)<input type="number" name="weight" min="25" max="350" step="0.1" placeholder="72" required></label>
               <label class="field">Mon objectif<select name="goal" required><option value="maintain">Maintenir mon poids</option><option value="lose">Perdre du poids</option><option value="gain">Prendre du poids</option></select></label>
               <label class="field">Poids visé (kg) <span>facultatif</span><input type="number" name="goalWeight" min="25" max="350" step="0.1" placeholder="70"></label>
-              <label class="field">Activité hors sport<select name="activity" required><option value="mostly-seated">Surtout assis</option><option value="on-feet">Souvent debout ou en mouvement</option><option value="physical">Travail physique</option></select></label>
+              <label class="field">Activité hors sport<select name="activity" required><option value="mostly-seated">Surtout assis</option><option value="on-feet">Souvent debout ou en mouvement léger</option><option value="physical">Travail physique ou déplacements fréquents</option><option value="very-physical">Travail très physique et soutenu</option></select></label>
               <label class="field">Séances de sport par semaine<input type="number" name="sport" min="0" max="7" value="0" required></label>
+            </div>
+            <div id="training-fields" hidden>
+              <div class="fields">
+                <label class="field">Activité sportive principale<select name="sportType"></select></label>
+                <label class="field">Minutes par séance<input type="number" name="sportMinutes" min="1" max="360" placeholder="45"></label>
+              </div>
+              <p class="small subtle">Choisis l’activité qui représente le mieux tes séances. Le sport est compté quand le type et la durée sont renseignés.</p>
             </div>
             <details class="advanced">
               <summary>Ajuster mes repères manuellement</summary>
               <div class="fields">
                 <label class="field">Énergie (kcal par jour)<input type="number" name="customCalories" min="1200" max="7000" placeholder="Auto"></label>
-                <label class="field">Boissons (L par jour)<input type="number" name="water" min="0.5" max="6" step="0.1" placeholder="Auto"></label>
+                <label class="field">Volume total de boissons (L par jour)<input type="number" name="water" min="0.5" max="6" step="any" placeholder="Auto"></label>
               </div>
             </details>
             <p class="subtle small">Repères indicatifs pour adultes. À ajuster selon ton activité, ton état de santé et tes besoins, notamment pendant la grossesse ou l’allaitement.</p>
@@ -178,6 +185,16 @@
           <section class="panel" aria-labelledby="target-title">
             <div class="section-head"><span class="tile mint"><svg><use href="#i-flame"/></svg></span><h2 id="target-title">Mes repères quotidiens</h2></div>
             <div id="profile-targets"></div>
+            <details class="target-sources">
+              <summary>Méthode et sources</summary>
+              <ul class="small">
+                <li><a href="https://doi.org/10.2903/j.efsa.2013.3005">EFSA · Besoins énergétiques et niveaux d’activité</a></li>
+                <li><a href="https://pacompendium.com/adult-compendium/">Compendium · Dépense par activité</a> et <a href="https://pacompendium.com/older-adult-compendium/">références dès 60 ans</a></li>
+                <li><a href="https://www.anses.fr/system/files/NUT2012SA0103Ra-2.pdf">Anses · Fourchettes de protéines, glucides et lipides</a></li>
+                <li><a href="https://www.anses.fr/fr/article/eau-bouteille-eau-du-robinet-bonnes-pratiques-consommation">Anses · Repère d’eau</a></li>
+                <li>Adaptation du poids · <a href="https://www.nhlbi.nih.gov/sites/default/files/media/docs/obesity-evidence-review.pdf">NHLBI</a> et <a href="https://www.nhs.uk/live-well/healthy-weight/managing-your-weight/healthy-ways-to-gain-weight/">NHS</a></li>
+              </ul>
+            </details>
           </section>
           <section class="panel" aria-labelledby="backup-title">
             <div class="section-head"><h2 id="backup-title">Mes données</h2></div>

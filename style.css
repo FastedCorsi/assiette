@@ -74,6 +74,7 @@ p { line-height: 1.5; }
 .macro-label::before { content: ""; display: inline-block; background: var(--track-fill); border-radius: 50%; width: .48rem; height: .48rem; }
 .macro-value { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .macro-value strong { font-size: 1.5rem; font-weight: 730; color: #172921; letter-spacing: -.045em; }
+.macro-note { margin-top: .25rem; font-size: .8rem; }
 .meter { height: .32rem; border-radius: 1rem; background: #edf0eb; margin-top: .65rem; overflow: hidden; }
 .meter span { display: block; height: 100%; border-radius: inherit; background: var(--track-fill, #82a56b); }
 .energy-meter { background: #ffffff30; --track-fill: #d5ebaa; height: .35rem; }
@@ -141,6 +142,9 @@ summary { cursor: pointer; font-size: .9rem; color: var(--forest); font-weight: 
 .target-list div:last-child { border-bottom: 0; }
 .target-list dd { font-weight: 680; margin: 0; }
 .target-notice { margin-top: .6rem; }
+#training-fields, .target-sources { margin-top: .8rem; }
+#training-fields > p { margin-top: .35rem; }
+.target-sources li + li { margin-top: .4rem; }
 .backup-actions, .weight-form { margin-top: .85rem; }
 .backup-panel { margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--border); }
 .backup-panel > p { margin: .35rem 0 .5rem; }
