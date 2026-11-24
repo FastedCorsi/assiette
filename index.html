@@ -169,10 +169,20 @@
               </div>
               <p class="small subtle">Choisis l’activité qui représente le mieux tes séances. Le sport est compté quand le type et la durée sont renseignés.</p>
             </div>
+            <div class="fields target-fields">
+              <label class="field" id="deficit-field" hidden>Déficit souhaité (kcal/jour)<input type="number" name="deficit" min="0" max="750" placeholder="500" inputmode="numeric" disabled></label>
+              <label class="field">Mode protéines<select name="proteinMode">
+                <option value="general">Repère général de l’Anses</option>
+                <option value="training">Entraînement régulier · selon le poids</option>
+                <option value="manual">Cible manuelle en grammes</option>
+              </select></label>
+              <label class="field" id="protein-rate-field" hidden>Protéines (g/kg par jour)<input type="number" name="proteinPerKg" min="1.2" max="2" step="0.1" placeholder="1,6" inputmode="decimal" disabled></label>
+              <label class="field" id="protein-grams-field" hidden>Protéines (g par jour)<input type="number" name="proteinGrams" min="1" max="400" inputmode="numeric" disabled></label>
+            </div>
             <details class="advanced">
               <summary>Ajuster mes repères manuellement</summary>
               <div class="fields">
-                <label class="field">Énergie (kcal par jour)<input type="number" name="customCalories" min="1200" max="7000" placeholder="Auto"></label>
+                <label class="field">Cible manuelle d’énergie (kcal/jour)<input type="number" name="customCalories" min="1200" max="7000" placeholder="Auto"></label>
                 <label class="field">Volume total de boissons (L par jour)<input type="number" name="water" min="0.5" max="6" step="any" placeholder="Auto"></label>
               </div>
             </details>
@@ -191,6 +201,7 @@
                 <li><a href="https://doi.org/10.2903/j.efsa.2013.3005">EFSA · Besoins énergétiques et niveaux d’activité</a></li>
                 <li><a href="https://pacompendium.com/adult-compendium/">Compendium · Dépense par activité</a> et <a href="https://pacompendium.com/older-adult-compendium/">références dès 60 ans</a></li>
                 <li><a href="https://www.anses.fr/system/files/NUT2012SA0103Ra-2.pdf">Anses · Fourchettes de protéines, glucides et lipides</a></li>
+                <li><a href="https://ods.od.nih.gov/factsheets/ExerciseAndAthleticPerformance-HealthProfessional/">NIH · Protéines et lipides pour les sportifs</a></li>
                 <li><a href="https://www.anses.fr/fr/article/eau-bouteille-eau-du-robinet-bonnes-pratiques-consommation">Anses · Repère d’eau</a></li>
                 <li>Adaptation du poids · <a href="https://www.nhlbi.nih.gov/sites/default/files/media/docs/obesity-evidence-review.pdf">NHLBI</a> et <a href="https://www.nhs.uk/live-well/healthy-weight/managing-your-weight/healthy-ways-to-gain-weight/">NHS</a></li>
               </ul>

@@ -1,4 +1,5 @@
 import { SPORT_OPTIONS, sportCaloriesPerDay, sportMet } from './activity.mjs';
+import { proteinPlan } from './protein-targets.mjs';
 
 const JOURNAL_KEY = 'assiette-journal-v1';
 const NUTRIENTS = { kcal: 1000, protein: 100, carbs: 100, fat: 100 };
@@ -33,7 +34,11 @@ function validProfile(profile) {
     (profile.sportType == null || Object.hasOwn(SPORT_OPTIONS, profile.sportType)) &&
     isOptional(profile.sportMinutes, 1, 360) &&
     isOptional(profile.goalWeight, 25, 350) && isOptional(profile.water, 0.5, 6) &&
-    isOptional(profile.customCalories, 1200, 7000);
+    isOptional(profile.customCalories, 1200, 7000) &&
+    (profile.deficit == null || (Number.isInteger(profile.deficit) && isBetween(profile.deficit, 0, 750))) &&
+    (profile.proteinMode == null || ['general', 'training', 'manual'].includes(profile.proteinMode)) &&
+    isOptional(profile.proteinPerKg, 1.2, 2) &&
+    (profile.proteinGrams == null || (Number.isInteger(profile.proteinGrams) && isBetween(profile.proteinGrams, 1, 400)));
 }
 
 function bodyMassIndex(weight, height) {
@@ -51,14 +56,16 @@ function energyAdjustment(profile, maintenance) {
     return { kcal: 0, notice: 'Le poids visé est déjà atteint. Le calcul utilise un repère de maintien.' };
   }
   if (goal === 'lose') {
+    const deficit = profile.deficit ?? 500;
+    if (deficit === 0) return { kcal: 0, notice: 'Le déficit choisi est de 0 kcal. Le repère correspond au maintien.' };
     if (bodyMassIndex(weight, height) < 25) {
       return { kcal: 0, notice: 'Le déficit automatique s’applique à partir d’un IMC de 25. Le repère affiché correspond au maintien.' };
     }
     const floor = profile.sex === 'male' ? 1500 : 1200;
-    if (maintenance - 500 < floor) {
-      return { kcal: 0, notice: 'Le repère de maintien est conservé, car le déficit standard donnerait un apport très bas.' };
+    if (maintenance - deficit < floor) {
+      return { kcal: 0, notice: 'Le repère de maintien est conservé, car le déficit choisi donnerait un apport très bas.' };
     }
-    return { kcal: -500, notice: 'Repère de perte de poids · 500 kcal de moins que le maintien estimé.' };
+    return { kcal: -deficit, notice: '' };
   }
   if (goal === 'gain') return { kcal: 300, notice: 'Repère de prise de poids · 300 kcal de plus que le maintien estimé.' };
   return { kcal: 0, notice: '' };
@@ -71,19 +78,24 @@ function maintenanceEnergy(profile) {
   return basalKcal * ACTIVITY_FACTORS[activity] + sportCaloriesPerDay(profile);
 }
 
+export function energyPlan(profile) {
+  if (!validProfile(profile)) return null;
+  const unroundedMaintenance = maintenanceEnergy(profile);
+  const maintenance = Math.round(unroundedMaintenance);
+  const adjustment = profile.customCalories == null ? energyAdjustment(profile, unroundedMaintenance) : null;
+  const kcal = Math.round(profile.customCalories ?? (unroundedMaintenance + adjustment.kcal));
+  const notice = adjustment?.notice ?? 'Le repère calorique manuel est utilisé.';
+  return { maintenance, kcal, difference: kcal - maintenance, notice };
+}
+
 function gramsRange(energy, low, high, kcalPerGram) {
   return [Math.ceil(energy * low / (100 * kcalPerGram)), Math.floor(energy * high / (100 * kcalPerGram))];
 }
 
-export function targetNotice(profile, targets = calculateTargets(profile)) {
+export function targetNotice(profile, targets = calculateTargets(profile), energy = energyPlan(profile)) {
   if (!targets) return '';
   const messages = [];
-  if (profile.customCalories != null) {
-    messages.push('Le repère calorique manuel est utilisé.');
-  } else {
-    const goalNotice = energyAdjustment(profile, maintenanceEnergy(profile)).notice;
-    if (goalNotice) messages.push(goalNotice);
-  }
+  if (energy?.notice) messages.push(energy.notice);
   if (profile.sport > 0 && profile.age < 19) {
     messages.push('Les tables de sport utilisées commencent à 19 ans. Le calcul utilise ton activité hors sport.');
   } else if (profile.sport > 0 && (!profile.sportMinutes || !profile.sportType)) {
@@ -91,18 +103,20 @@ export function targetNotice(profile, targets = calculateTargets(profile)) {
   } else if (profile.sport > 0 && sportMet(profile.age, profile.sportType) == null) {
     messages.push('Le Compendium ne fournit pas de valeur pour cette activité et cette tranche d’âge. Le calcul utilise ton activité hors sport.');
   }
+  const protein = proteinPlan(profile, targets.kcal, targets.ranges.fat);
+  if (protein?.error || protein?.note) messages.push(protein.error ?? protein.note);
   const proteinReference = Math.ceil(profile.weight * (profile.age > 70 ? 1 : 0.83));
-  if (proteinReference > targets.ranges.protein[1]) {
+  if (targets.proteinGoal == null && proteinReference > targets.ranges.protein[1]) {
     messages.push('La référence de protéines par kg dépasse la fourchette calculée avec ce repère d’énergie.');
   }
   return messages.join(' ');
 }
 
 export function calculateTargets(profile) {
-  if (!validProfile(profile)) return null;
-  const { age, sex, activity, weight, water, customCalories } = profile;
-  const maintenance = maintenanceEnergy(profile);
-  const kcal = Math.round(customCalories ?? (maintenance + energyAdjustment(profile, maintenance).kcal));
+  const energy = energyPlan(profile);
+  if (!energy) return null;
+  const { kcal } = energy;
+  const { age, sex, activity, weight, water } = profile;
   const highOccupationalActivity = activity === 'very-physical' && age <= 70;
   const lowActivity = activity === 'mostly-seated' && sportCaloriesPerDay(profile) === 0;
   const proteinPercent = age > 70 ? 15 : lowActivity && age > (sex === 'female' ? 50 : 60) ? 12 : 10;
@@ -114,6 +128,12 @@ export function calculateTargets(profile) {
     carbs: highOccupationalActivity ? gramsRange(kcal, 50, 60, 4) : gramsRange(kcal, 40, 55, 4),
     fat: highOccupationalActivity ? gramsRange(kcal, 30, 35, 9) : gramsRange(kcal, 35, 40, 9),
   };
+  const protein = proteinPlan(profile, kcal, ranges.fat);
+  if (protein && !protein.error) {
+    ranges.protein = protein.protein;
+    ranges.carbs = protein.carbs;
+    ranges.fat = protein.fat;
+  }
   if (water == null) ranges.water = [1500, 2000];
   return {
     kcal,
@@ -122,6 +142,7 @@ export function calculateTargets(profile) {
     fat: ranges.fat[0],
     water: Math.round((water ?? 1.5) * 1000),
     ranges,
+    ...(protein?.goal != null ? { proteinGoal: protein.goal } : {}),
   };
 }
 
@@ -217,6 +238,12 @@ export function summarizeDay(entries, targets) {
     const maximum = targets.ranges?.[nutrient]?.[1] ?? minimum;
     const unit = nutrient === 'kcal' ? 'kcal' : nutrient === 'water' ? 'ml' : 'g';
     const formatGap = difference => `${FR_NUMBER.format(difference)} ${unit}`;
+    if (nutrient === 'protein' && targets.proteinGoal != null) {
+      const difference = targets.proteinGoal - amount;
+      if (difference <= 0) positive.push('Protéines · cible atteinte.');
+      else attention.push(`Protéines à ${formatGap(difference)} de la cible.`);
+      continue;
+    }
     if (nutrient === 'water' && amount >= minimum) {
       positive.push(`${label} · repère atteint.`);
     } else if ((amount >= minimum && amount <= maximum) || (!targets.ranges?.[nutrient] && Math.round(amount) === minimum)) {
@@ -233,9 +260,15 @@ export function summarizeDay(entries, targets) {
 function normalizeProfile(profile) {
   if (profile === null) return null;
   if (!validProfile(profile)) throw new Error('Le profil du fichier est invalide.');
-  const { name, age, sex, height, weight, goal, activity, sport, goalWeight, water, customCalories, sportType, sportMinutes } = profile;
+  const {
+    name, age, sex, height, weight, goal, activity, sport, goalWeight, water, customCalories,
+    sportType, sportMinutes, deficit, proteinMode, proteinPerKg, proteinGrams,
+  } = profile;
   return { name: name?.trim() ?? '', age, sex, height, weight, goal, activity, sport,
     ...(sportType != null ? { sportType } : {}), ...(sportMinutes != null ? { sportMinutes } : {}),
+    ...(deficit != null ? { deficit } : {}),
+    ...(proteinMode != null && proteinMode !== 'general' ? { proteinMode } : {}),
+    ...(proteinPerKg != null ? { proteinPerKg } : {}), ...(proteinGrams != null ? { proteinGrams } : {}),
     goalWeight: goalWeight ?? null, water: water ?? null, customCalories: customCalories ?? null };
 }
 
@@ -248,7 +281,7 @@ function normalizeTargets(targets) {
     throw new Error('Les repères de la journée sont invalides.');
   }
   const normalized = { kcal, protein, carbs, fat, water };
-  if (targets.ranges == null) return normalized;
+  if (targets.ranges == null && targets.proteinGoal == null) return normalized;
   if (!isRecord(targets.ranges)) throw new Error('Les fourchettes de la journée sont invalides.');
   const ranges = {};
   for (const key of ['protein', 'carbs', 'fat', 'water']) {
@@ -260,7 +293,11 @@ function normalizeTargets(targets) {
     }
     ranges[key] = [...range];
   }
-  return { ...normalized, ranges };
+  if (targets.proteinGoal == null) return { ...normalized, ranges };
+  if (!isBetween(targets.proteinGoal, ranges.protein[0], ranges.protein[1])) {
+    throw new Error('La cible de protéines de la journée est invalide.');
+  }
+  return { ...normalized, ranges, proteinGoal: targets.proteinGoal };
 }
 
 function normalizeItem(item) {

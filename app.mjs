@@ -3,8 +3,9 @@ import { parseMeal } from './nutrition.mjs';
 import { openReview } from './review.mjs';
 import { createBackupSync } from './backup-sync.mjs';
 import { SPORT_OPTIONS, sportCaloriesPerDay, sportMet } from './activity.mjs';
+import { weightTrend } from './weight-trend.mjs';
 import {
-  calculateTargets, targetNotice, localDate, shiftDate, formatDate, aggregateEntries,
+  calculateTargets, energyPlan, targetNotice, localDate, shiftDate, formatDate, aggregateEntries,
   summarizeDay, loadJournal, saveJournal, exportJournal, importJournal,
 } from './journal.mjs';
 
@@ -126,10 +127,15 @@ function displayMetric(key, amount) {
 }
 
 function displayTarget(key, targets) {
+  if (key === 'protein' && targets.proteinGoal != null) return displayMetric(key, targets.proteinGoal);
   const range = targets.ranges?.[key];
   if (!range) return displayMetric(key, targets[key]);
   if (key === 'water') return number.format(range[0] / 1000) + '–' + number.format(range[1] / 1000) + ' L';
   return number.format(range[0]) + '–' + number.format(range[1]) + ' g';
+}
+
+function signed(value) {
+  return (value > 0 ? '+' : value < 0 ? '−' : '') + number.format(Math.abs(value));
 }
 
 function metricCard(metric, totals, targets) {
@@ -140,7 +146,7 @@ function metricCard(metric, totals, targets) {
   const value = el('div', 'macro-value');
   const amount = countsPlainWater ? totals.plainWater : totals[key];
   const measured = el('strong', '', displayMetric(key, amount));
-  const target = targets?.[key];
+  const target = key === 'protein' ? targets?.proteinGoal ?? targets?.protein : targets?.[key];
   const isPartial = Boolean(totals.missing[key]);
   card.style.setProperty('--track-fill', color);
   value.append(measured, el('span', '', (target ? ' / ' + displayTarget(key, targets) : '') + (isPartial ? ' · partiel' : '')));
@@ -151,6 +157,10 @@ function metricCard(metric, totals, targets) {
   updateMeter(meter, amount, target, isPartial);
   card.append(title, value, meter);
   if (countsPlainWater) card.append(el('p', 'subtle macro-note', volume(totals.water) + ' de boissons au total'));
+  if (key === 'protein' && targets?.proteinGoal != null) {
+    const [low, high] = targets.ranges.protein;
+    if (low !== high) card.append(el('p', 'subtle macro-note', 'Fourchette · ' + number.format(low) + '–' + number.format(high) + ' g'));
+  }
   return card;
 }
 
@@ -271,7 +281,11 @@ function renderHistory() {
       el('p', 'small subtle', 'Dernière pesée le ' + formatDate(latest)));
     if (variation !== null) {
       const change = Math.round(variation * 10) / 10;
-      overview.append(el('p', 'small subtle', (change > 0 ? '+' : '') + number.format(change) + ' kg depuis la pesée précédente'));
+      const trend = weightTrend(journal.days, localDate());
+      overview.append(el('p', 'small subtle', trend
+        ? 'Tendance · ' + signed(Math.round(trend.delta * 10) / 10) + ' kg entre deux périodes de 14 jours (' +
+          trend.previousCount + ' et ' + trend.latestCount + ' pesées)'
+        : signed(change) + ' kg depuis la pesée précédente'));
     }
     if (goal != null) overview.append(el('p', 'small subtle', 'Poids visé · ' + number.format(goal) + ' kg'));
   } else {
@@ -323,6 +337,20 @@ function updateTrainingFields(selected = profileForm.elements.sportType.value) {
   profileForm.elements.sportMinutes.disabled = type.disabled;
 }
 
+function updateGoalFields() {
+  const mode = profileForm.elements.proteinMode.value;
+  const fields = [
+    ['deficit', '#deficit-field', profileForm.elements.goal.value === 'lose'],
+    ['proteinPerKg', '#protein-rate-field', mode === 'training'],
+    ['proteinGrams', '#protein-grams-field', mode === 'manual'],
+  ];
+  for (const [name, label, visible] of fields) {
+    $(label).hidden = !visible;
+    profileForm.elements[name].disabled = !visible;
+  }
+  profileForm.elements.proteinGrams.required = mode === 'manual';
+}
+
 function populateProfile() {
   profileForm.reset();
   profileDirty = false;
@@ -333,28 +361,45 @@ function populateProfile() {
     if (field && value != null) field.value = value;
   }
   updateTrainingFields(profile?.sportType ?? '');
+  updateGoalFields();
 }
 
-function renderProfileTargets() {
+function renderProfileTargets(profile = journal.profile, preview = false) {
   const output = $('#profile-targets');
-  const targets = calculateTargets(journal.profile);
+  const targets = calculateTargets(profile);
   if (!targets) {
-    output.replaceChildren(empty('Enregistre ton profil pour calculer les repères.'));
+    if (!preview) output.replaceChildren(empty('Enregistre ton profil pour calculer les repères.'));
     return;
   }
+  const energy = energyPlan(profile);
   const list = el('dl', 'target-list');
-  for (const metric of [{ key: 'kcal', label: 'Énergie' }, ...metrics]) {
+  function addTarget(label, target) {
     const row = el('div');
-    const label = metric.key === 'water' && targets.ranges?.water ? 'Eau' : metric.label;
-    row.append(el('dt', '', label), el('dd', '', displayTarget(metric.key, targets)));
+    row.append(el('dt', '', label), el('dd', '', target));
     list.append(row);
   }
-  output.replaceChildren(list);
-  const sportEnergy = sportCaloriesPerDay(journal.profile);
-  if (sportEnergy > 0 && journal.profile.customCalories == null) {
-    output.append(el('p', 'small subtle target-notice', 'Sport compté · environ ' + displayMetric('kcal', sportEnergy) + ' par jour en moyenne.'));
+  addTarget('Cible énergie', displayMetric('kcal', targets.kcal));
+  addTarget('Maintien estimé', displayMetric('kcal', energy.maintenance));
+  const relativeChange = energy.difference / energy.maintenance * 100;
+  const percent = Math.round(relativeChange * 10) / 10;
+  addTarget('Écart avec le maintien', signed(energy.difference) + ' kcal' +
+    (energy.difference ? ' (' + signed(percent) + ' %)' : ''));
+  for (const metric of metrics) {
+    const label = metric.key === 'water' && targets.ranges?.water ? 'Eau' : metric.label;
+    addTarget(label, displayTarget(metric.key, targets));
   }
-  const notice = targetNotice(journal.profile, targets);
+  output.replaceChildren(list);
+  if (preview) output.prepend(el('p', 'small subtle', 'Aperçu des réglages avant enregistrement.'));
+  const sportEnergy = sportCaloriesPerDay(profile);
+  if (sportEnergy > 0) {
+    output.append(el('p', 'small subtle target-notice', 'Sport compté dans le maintien · environ ' + displayMetric('kcal', sportEnergy) + ' par jour.'));
+  }
+  if (targets.proteinGoal != null) {
+    const share = targets.proteinGoal * 4 / targets.kcal * 100;
+    output.append(el('p', 'small subtle target-notice', 'La cible de protéines représente ' + number.format(share) +
+      ' % de l’énergie. Les glucides correspondent au solde selon la part de lipides.'));
+  }
+  const notice = targetNotice(profile, targets, energy);
   if (notice) output.append(el('p', 'small subtle target-notice', notice));
 }
 
@@ -494,22 +539,37 @@ photoAnalyze.addEventListener('click', async () => {
   }
 });
 
-profileForm.addEventListener('input', () => { profileDirty = true; });
-for (const field of ['age', 'sport']) {
-  profileForm.elements[field].addEventListener('input', () => updateTrainingFields());
+function readProfileForm() {
+  const profile = Object.fromEntries(new FormData(profileForm));
+  profile.name = profile.name.trim();
+  for (const field of ['age', 'height', 'weight', 'sport', 'sportMinutes', 'goalWeight', 'water', 'customCalories',
+    'deficit', 'proteinPerKg', 'proteinGrams']) {
+    const rememberWhenHidden = ['deficit', 'proteinPerKg', 'proteinGrams'].includes(field);
+    const value = rememberWhenHidden && profileForm.elements[field].disabled
+      ? journal.profile?.[field] : profile[field];
+    profile[field] = value == null || value === '' ? null : Number(value);
+  }
+  profile.sportType ||= null;
+  return profile;
 }
+
+profileForm.addEventListener('input', event => {
+  profileDirty = true;
+  if (['age', 'sport'].includes(event.target.name)) updateTrainingFields();
+  if (['goal', 'proteinMode'].includes(event.target.name)) updateGoalFields();
+  if (profileForm.matches(':valid')) renderProfileTargets(readProfileForm(), true);
+});
 profileForm.addEventListener('submit', event => {
   event.preventDefault();
   refreshToday();
-  const profile = Object.fromEntries(new FormData(profileForm));
-  profile.name = profile.name.trim();
-  for (const field of ['age', 'height', 'weight', 'sport', 'sportMinutes', 'goalWeight', 'water', 'customCalories']) {
-    profile[field] = profile[field] == null || profile[field] === '' ? null : Number(profile[field]);
-  }
-  profile.sportType ||= null;
+  const profile = readProfileForm();
   const targets = calculateTargets(profile);
   const status = $('#profile-status');
   if (!targets) { status.textContent = 'Vérifie les informations saisies.'; return; }
+  if (profile.proteinMode !== 'general' && targets.proteinGoal == null) {
+    status.textContent = targetNotice(profile, targets);
+    return;
+  }
   const success = updateJournal(state => {
     const firstWeight = state.profile?.weight !== profile.weight || Object.values(state.days).every(day => day.weight == null);
     state.profile = profile;

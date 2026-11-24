@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sportCaloriesPerDay } from './activity.mjs';
 import {
-  aggregateEntries, calculateTargets, exportJournal, formatDate, importJournal,
+  aggregateEntries, calculateTargets, energyPlan, exportJournal, formatDate, importJournal,
   loadJournal, localDate, saveJournal, shiftDate, summarizeDay, targetNotice,
 } from './journal.mjs';
 
@@ -50,6 +50,34 @@ test('le déficit automatique est écarté hors du cadre retenu', () => {
   assert.match(targetNotice({ ...light, goal: 'lose' }), /maintien/);
   const lowEnergyEstimate = { ...profile, height: 120, weight: 38, age: 80 };
   assert.deepEqual(calculateTargets(lowEnergyEstimate), calculateTargets({ ...lowEnergyEstimate, goal: 'lose' }));
+});
+
+test('le maintien et l’écart distinguent le déficit choisi de la cible manuelle', () => {
+  const overweight = { ...profile, weight: 85, goal: 'lose', deficit: 150 };
+  const energy = energyPlan(overweight);
+  assert.equal(energy.difference, -150);
+  assert.equal(energy.kcal, energy.maintenance - 150);
+  assert.equal(energyPlan({ ...overweight, deficit: 650 }).difference, -650);
+  assert.equal(energyPlan({ ...overweight, weight: 68 }).difference, 0);
+  const manual = energyPlan({ ...overweight, customCalories: 1950 });
+  assert.equal(manual.kcal, 1950);
+  assert.equal(manual.difference, 1950 - energy.maintenance);
+  assert.equal(energyPlan({ ...overweight, deficit: 751 }), null);
+});
+
+test('la cible de protéines et ses réglages survivent à une sauvegarde', () => {
+  const selected = { ...profile, goal: 'lose', deficit: 150, customCalories: 1950,
+    proteinMode: 'manual', proteinGrams: 130 };
+  const targets = calculateTargets(selected);
+  assert.equal(targets.kcal, 1950);
+  assert.equal(targets.proteinGoal, 130);
+  assert.deepEqual(targets.ranges.protein, [130, 130]);
+  const date = '2026-11-24';
+  const restored = importJournal(exportJournal({ profile: selected, days: { [date]: { entries, targets } } }));
+  assert.equal(restored.profile.deficit, 150);
+  assert.equal(restored.profile.proteinMode, 'manual');
+  assert.equal(restored.profile.proteinGrams, 130);
+  assert.equal(restored.days[date].targets.proteinGoal, 130);
 });
 
 test('les fourchettes Anses sont converties en grammes et le repère d’eau reste séparé', () => {

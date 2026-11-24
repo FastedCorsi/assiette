@@ -142,7 +142,7 @@ summary { cursor: pointer; font-size: .9rem; color: var(--forest); font-weight: 
 .target-list div:last-child { border-bottom: 0; }
 .target-list dd { font-weight: 680; margin: 0; }
 .target-notice { margin-top: .6rem; }
-#training-fields, .target-sources { margin-top: .8rem; }
+#training-fields, .target-sources, .target-fields { margin-top: .8rem; }
 #training-fields > p { margin-top: .35rem; }
 .target-sources li + li { margin-top: .4rem; }
 .backup-actions, .weight-form { margin-top: .85rem; }
