@@ -1,4 +1,4 @@
-import { aggregateEntries, calculateTargets, energyPlan, shiftDate } from './journal.mjs?v=suivi-2';
+import { aggregateEntries, calculateTargets, energyPlan, shiftDate } from './journal.mjs?v=simple-3';
 
 const DAYS_PER_WEEK = 7;
 const MIN_LOGGED_DAYS = 5;

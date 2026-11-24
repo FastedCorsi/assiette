@@ -1,4 +1,4 @@
-import { shiftDate } from './journal.mjs?v=suivi-2';
+import { shiftDate } from './journal.mjs?v=simple-3';
 
 const WINDOW_DAYS = 14;
 

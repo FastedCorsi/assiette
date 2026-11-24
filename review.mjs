@@ -1,7 +1,7 @@
 import { $, el, icon, button, number } from './ui.mjs';
-import { aggregateEntries, formatDate, knownTotal } from './journal.mjs?v=suivi-2';
-import { findFoodReference, lookupProducts } from './nutrition.mjs?v=suivi-2';
-import { searchCiqualFoods } from './ciqual-search.mjs?v=suivi-2';
+import { aggregateEntries, formatDate, knownTotal } from './journal.mjs?v=simple-3';
+import { findFoodReference, lookupProducts } from './nutrition.mjs?v=simple-3';
+import { searchCiqualFoods } from './ciqual-search.mjs?v=simple-3';
 
 const dialog = $('#entry-dialog');
 const reviewForm = $('#review-form');
@@ -194,6 +194,8 @@ function itemEditor(item, index) {
   remove.setAttribute('aria-label', 'Retirer l’ingrédient ' + (index + 1));
   remove.append(icon('close'));
   const metadata = el('p', 'small subtle review-meta');
+  const options = el('details', 'review-options');
+  const optionTitle = el('summary', '', 'Détails de l’aliment');
   const details = el('details');
   const detailTitle = el('summary');
   const nutrientFields = el('div', 'nutrient-fields');
@@ -214,6 +216,13 @@ function itemEditor(item, index) {
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       metadata.append(' · ', link);
+    }
+    const searchOutsideOptions = item.kcal == null && Boolean(item.name.trim());
+    if (searchOutsideOptions && ciqual.parentElement === options) {
+      editor.insertBefore(ciqual, options);
+      editor.insertBefore(product, options);
+    } else if (!searchOutsideOptions && ciqual.parentElement !== options) {
+      options.append(ciqual, product);
     }
   }
 
@@ -271,6 +280,7 @@ function itemEditor(item, index) {
     item.source = '';
     delete item.barcode;
     refresh();
+    options.open = true;
     details.open = true;
     renderTotal();
   });
@@ -293,12 +303,15 @@ function itemEditor(item, index) {
   }
   fields.append(field('Aliment ou boisson', name), field('Quantité', quantity), field('Unité', unit), remove);
   details.append(detailTitle, nutrientFields);
-  editor.append(el('legend', '', 'Ingrédient ' + (index + 1)), fields, metadata, details, ciqualLookup(item, applyCiqual), productLookup(item, unitChanged => {
+  const ciqual = ciqualLookup(item, applyCiqual);
+  const product = productLookup(item, unitChanged => {
     name.setCustomValidity('');
     referenceName = item.name.trim();
     refresh();
     if (unitChanged) quantity.focus();
-  }));
+  });
+  options.append(optionTitle, details, ciqual, product);
+  editor.append(el('legend', '', 'Ingrédient ' + (index + 1)), fields, metadata, options);
   refresh();
   return editor;
 }
@@ -358,6 +371,7 @@ export function openReview(entry, date, save, remove = null) {
   draft = { entry: structuredClone(entry), save, remove };
   if (remove) draft.entry.items.forEach(fillMissingReference);
   reviewError.hidden = true;
+  $('#review-name').open = false;
   $('#review-title').textContent = remove ? 'Modifier l’entrée' : 'Vérifier l’entrée';
   $('#review-date').textContent = formatDate(date);
   $('#delete-entry').hidden = !remove;

@@ -1,16 +1,16 @@
 import { $, $$, el, icon, button, empty, number, volume } from './ui.mjs';
-import { parseMeal } from './nutrition.mjs?v=suivi-2';
-import { openReview } from './review.mjs?v=suivi-2';
-import { createBackupSync } from './backup-sync.mjs?v=suivi-2';
+import { parseMeal } from './nutrition.mjs?v=simple-3';
+import { openReview } from './review.mjs?v=simple-3';
+import { createBackupSync } from './backup-sync.mjs?v=simple-3';
 import { SPORT_OPTIONS, sportCaloriesPerDay, sportMet } from './activity.mjs';
-import { weightTrend } from './weight-trend.mjs?v=suivi-2';
-import { dayGuidance, weeklyOverview } from './guidance.mjs?v=suivi-2';
-import { calorieReview } from './adaptive-targets.mjs?v=suivi-2';
-import { prepareOffline } from './offline.mjs?v=suivi-2';
+import { weightTrend } from './weight-trend.mjs?v=simple-3';
+import { dayGuidance, weeklyOverview } from './guidance.mjs?v=simple-3';
+import { calorieReview } from './adaptive-targets.mjs?v=simple-3';
+import { prepareOffline } from './offline.mjs?v=simple-3';
 import {
   calculateTargets, energyPlan, targetNotice, localDate, shiftDate, formatDate, aggregateEntries, knownTotal,
   summarizeDay, loadJournal, saveJournal, exportJournal, importJournal,
-} from './journal.mjs?v=suivi-2';
+} from './journal.mjs?v=simple-3';
 
 const metrics = [
   { key: 'protein', label: 'Protéines', color: '#397d5b' },
@@ -25,6 +25,7 @@ const dayPicker = $('#day-picker');
 const entryText = $('#entry-text');
 const photoFile = $('#photo-file');
 const cameraFile = $('#camera-file');
+const photoText = $('#photo-text');
 const photoPreview = $('#photo-preview');
 const photoAnalyze = $('#photo-analyze');
 const photoStatus = $('#photo-status');
@@ -238,13 +239,13 @@ function renderGuidance(entries, targets, day) {
   }
   $('#day-check').hidden = entries.length === 0;
   $('#day-check-note').textContent = confirmed
-    ? 'Journée confirmée. Une modification des repas ou boissons la rouvre.'
-    : 'Confirme quand tu as saisi tous tes repas et boissons. Le bilan sur 7 jours se base sur les journées confirmées.';
-  $('#confirm-day').textContent = confirmed ? 'Rouvrir la journée' : 'Confirmer ma journée';
+    ? 'Journée confirmée. Ajouter ou modifier une entrée la rouvre.'
+    : 'Quand tous tes repas et boissons sont saisis, termine la journée pour l’inclure dans le bilan de la semaine.';
+  $('#confirm-day').textContent = confirmed ? 'Rouvrir la journée' : 'Terminer la journée';
 }
 
 function renderWeeklyOverview() {
-  const { periodStart, periodEnd, recordedDays, confirmedDays, metrics: results } = weeklyOverview(journal.days, date);
+  const { periodStart, periodEnd, recordedDays, confirmedDays, metrics: results } = weeklyOverview(journal.days, localDate());
   const output = $('#weekly-overview');
   output.replaceChildren(el('p', 'small subtle', formatDate(periodStart, { day: 'numeric', month: 'short' }) +
     ' au ' + formatDate(periodEnd, { day: 'numeric', month: 'short' }) + ' · ' + confirmedDays + '/7 jours confirmés'));
@@ -340,7 +341,6 @@ function renderJournal() {
     [empty('Aucune entrée enregistrée pour cette journée.')]));
   renderSummary(entries, targets);
   renderGuidance(entries, targets, day);
-  renderWeeklyOverview();
 }
 
 function renderCalorieReview() {
@@ -420,6 +420,7 @@ function renderHistory() {
   $('#more-history').hidden = recorded.length <= historyLimit;
   weightForm.elements.date.max = localDate();
   renderCalorieReview();
+  renderWeeklyOverview();
 }
 
 function updateTrainingFields(selected = profileForm.elements.sportType.value) {
@@ -534,7 +535,9 @@ function setMode(nextMode) {
   $('#text-entry').hidden = mode === 'photo';
   $('#photo-entry').hidden = mode !== 'photo';
   $('#entry-label').textContent = mode === 'drink' ? 'Décris tes boissons' : 'Décris ton repas';
-  entryText.placeholder = mode === 'drink' ? '500 ml d’eau, café, 25 cl de jus d’orange' : '150 g de poulet, riz cuit, 1/2 avocat';
+  entryText.placeholder = mode === 'drink' ? '500 ml d’eau, café, 25 cl de jus d’orange' : '150 g de poulet, riz, 2 clémentines';
+  $('#entry-tip').textContent = mode === 'drink' ? 'Sépare les boissons par des virgules.' : 'Sépare les ingrédients par des virgules.';
+  for (const water of $$('[data-water]:not([data-water="250"])')) water.hidden = mode !== 'drink';
   $('#entry-error').hidden = true;
 }
 
@@ -560,11 +563,6 @@ $('#entry-form').addEventListener('submit', event => {
   });
 });
 
-$('#quick-entry').addEventListener('click', () => {
-  setMode('meal');
-  entryText.focus({ preventScroll: true });
-  $('#entry-panel').scrollIntoView({ block: 'start' });
-});
 $('#confirm-day').addEventListener('click', () => {
   refreshToday();
   const dayKey = date;
@@ -585,11 +583,6 @@ for (const control of $$('[data-water]')) {
   });
 }
 for (const control of $$('[data-mode]')) control.addEventListener('click', () => setMode(control.dataset.mode));
-$('#example').addEventListener('click', () => {
-  if (!entryText.value.trim()) entryText.value = entryText.placeholder;
-  entryText.focus();
-});
-$('#photo-to-text').addEventListener('click', () => { setMode('meal'); entryText.focus(); });
 
 function selectPhoto(photo) {
   selectedPhoto = photo;
@@ -599,12 +592,20 @@ function selectPhoto(photo) {
   if (photoUrl) photoPreview.src = photoUrl;
   else photoPreview.removeAttribute('src');
   photoAnalyze.disabled = !photo;
+  photoAnalyze.hidden = !photo;
   $('#clear-photo').hidden = !photo;
+  const additions = $('#photo-additions');
+  additions.hidden = !photo;
+  if (!photo) {
+    photoText.value = '';
+    additions.open = false;
+  }
   photoStatus.textContent = '';
   photoResults.replaceChildren();
 }
 
 photoFile.addEventListener('change', () => selectPhoto(photoFile.files[0]));
+$('#choose-photo').addEventListener('click', () => photoFile.click());
 $('#clear-photo').addEventListener('click', () => {
   photoFile.value = '';
   selectPhoto(null);
@@ -640,8 +641,7 @@ photoAnalyze.addEventListener('click', async () => {
     review.addEventListener('click', () => {
       refreshToday();
       const photoDate = date;
-      const description = entryText.value;
-      const manualItems = parseMeal(description);
+      const manualItems = parseMeal(photoText.value);
       const manualNames = new Set(manualItems.map(item => item.name.toLocaleLowerCase('fr')));
       const photoItems = suggestions.flatMap(({ name, grams }) => parseMeal(name)
         .filter(item => !manualNames.has(item.name.toLocaleLowerCase('fr')))
@@ -655,7 +655,6 @@ photoAnalyze.addEventListener('click', async () => {
       openReview(newEntry('meal', [...photoItems, ...manualItems], 'Repas'), photoDate, entry => {
         const success = storeEntry(entry, photoDate);
         if (success) {
-          if (description === entryText.value) entryText.value = '';
           photoFile.value = '';
           selectPhoto(null);
         }
@@ -827,8 +826,25 @@ $('#backup-disconnect').addEventListener('click', () => { void cloudBackup.disco
 
 $('#previous-day').addEventListener('click', () => chooseDate(shiftDate(date, -1)));
 $('#next-day').addEventListener('click', () => chooseDate(shiftDate(date, 1)));
-$('#go-today').addEventListener('click', () => chooseDate(localDate()));
-dayPicker.addEventListener('change', () => chooseDate(dayPicker.value));
+$('#go-today').addEventListener('click', () => {
+  chooseDate(localDate());
+  $('#date-menu').open = false;
+  $('#date-menu summary').focus();
+});
+$('#date-menu').addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  $('#date-menu').open = false;
+  $('#date-menu summary').focus();
+});
+dayPicker.addEventListener('change', () => {
+  if (!validDay(dayPicker.value)) {
+    dayPicker.value = date;
+    return;
+  }
+  chooseDate(dayPicker.value);
+  $('#date-menu').open = false;
+  $('#date-menu summary').focus();
+});
 window.addEventListener('hashchange', () => showPage(true));
 window.addEventListener('storage', event => {
   if (event.key !== 'assiette-journal-v1' && event.key !== null) return;

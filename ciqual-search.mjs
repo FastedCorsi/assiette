@@ -1,4 +1,4 @@
-import { CIQUAL_FOODS } from './ciqual-catalog.mjs?v=suivi-2';
+import { CIQUAL_FOODS } from './ciqual-catalog.mjs?v=simple-3';
 
 const STOP_WORDS = new Set(['a', 'au', 'aux', 'd', 'de', 'des', 'du', 'en', 'et', 'l', 'la', 'le', 'les', 'ou', 'pour']);
 const INVARIABLE = new Set(['ananas', 'anis', 'cassis', 'chips', 'couscous', 'mais', 'merlus', 'panais', 'paris', 'radis', 'tapas']);

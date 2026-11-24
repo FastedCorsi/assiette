@@ -1,5 +1,5 @@
 import { photoFoods, photoDrinks } from './photo-foods.mjs';
-import { findCiqualFood, findCiqualFoodByCode } from './ciqual-search.mjs?v=suivi-2';
+import { findCiqualFood, findCiqualFoodByCode } from './ciqual-search.mjs?v=simple-3';
 
 // Anses, Table Ciqual 2025, DOI 10.57745/RDMHWY, Licence ouverte Etalab 2.0.
 // Each row records the Ciqual ID, display name, serving size, kcal, protein, carbs,

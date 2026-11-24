@@ -1,4 +1,4 @@
-const RELEASE = 'suivi-2';
+const RELEASE = 'simple-3';
 const CACHE_PREFIX = 'assiette-shell-';
 const CACHE = CACHE_PREFIX + RELEASE;
 const HOME = new URL('./', self.registration.scope);
@@ -35,7 +35,12 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('message', event => {
-  if (event.data === 'activate-update') event.waitUntil(self.skipWaiting());
+  if (event.data !== 'activate-update') return;
+  const client = event.source;
+  event.waitUntil((async () => {
+    await self.skipWaiting();
+    if (client?.type === 'window') await client.navigate(client.url);
+  })());
 });
 
 self.addEventListener('fetch', event => {

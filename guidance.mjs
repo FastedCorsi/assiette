@@ -1,5 +1,5 @@
-import { findCiqualFoodByCode } from './ciqual-search.mjs?v=suivi-2';
-import { aggregateEntries, shiftDate } from './journal.mjs?v=suivi-2';
+import { findCiqualFoodByCode } from './ciqual-search.mjs?v=simple-3';
+import { aggregateEntries, shiftDate } from './journal.mjs?v=simple-3';
 
 const WEEK_LENGTH = 7;
 const CIQUAL_SOURCE = 'Ciqual 2025';
