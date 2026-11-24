@@ -182,17 +182,20 @@ function isPlainWater(item) {
 
 export function aggregateEntries(entries) {
   const missing = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
-  const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, water: 0, plainWater: 0, estimated: 0, unknown: 0, entries: entries.length, missing };
+  const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, water: 0, plainWater: 0, estimated: 0, unknown: 0,
+    entries: entries.length, items: 0, missing };
   for (const entry of entries) {
     for (const item of entry.items) {
+      totals.items += 1;
       if (item.estimated) totals.estimated += 1;
-      if (entry.kind === 'drink' && item.unit === 'ml') {
+      const hasQuantity = Number.isFinite(item.grams) && item.grams > 0;
+      if (hasQuantity && entry.kind === 'drink' && item.unit === 'ml') {
         totals.water += item.grams;
         if (isPlainWater(item)) totals.plainWater += item.grams;
       }
       let hasMissingNutrient = false;
       for (const nutrient of Object.keys(NUTRIENTS)) {
-        if (Number.isFinite(item[nutrient])) {
+        if (hasQuantity && Number.isFinite(item[nutrient])) {
           totals[nutrient] += item[nutrient] * item.grams / 100;
         } else {
           missing[nutrient] += 1;
@@ -203,6 +206,10 @@ export function aggregateEntries(entries) {
     }
   }
   return totals;
+}
+
+export function knownTotal(totals, nutrient) {
+  return totals.items > 0 && totals.missing[nutrient] === totals.items ? null : totals[nutrient];
 }
 
 export function summarizeDay(entries, targets) {

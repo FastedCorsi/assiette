@@ -32,6 +32,15 @@ test('retains unknown labels and missing nutrient values', () => {
   assert.deepEqual([unknown.name, unknown.grams, unknown.unit, unknown.estimated], ['boisson maison', 250, 'ml', true]);
 });
 
+test('retrouve les calories des clémentines et plats du catalogue', () => {
+  const items = parseMeal('2 clémentines, 125,5 g de clementine, 150 g de paëlla, 200 g de couscous au poulet, 100 g d’endive crue');
+  assert.deepEqual(items.map(({ grams, kcal, estimated }) => [grams, kcal, estimated]), [
+    [150, 45.5, true], [125.5, 45.5, false], [150, 135, false], [200, 130, false], [100, 16.6, false],
+  ]);
+  assert.ok(items.every(item => item.source === 'Ciqual 2025'));
+  assert.equal(parseMeal('100 g de mon mélange maison unique')[0].kcal, null);
+});
+
 test('leaves invalid explicit quantities blank for correction', () => {
   const items = parseMeal('0g de riz, -15,5 g de poulet, 0 œuf, -2 verres d’eau, 101kg de riz');
   assert.deepEqual(items.map(item => item.grams), [null, null, null, null, null]);

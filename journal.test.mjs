@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sportCaloriesPerDay } from './activity.mjs';
 import {
-  aggregateEntries, calculateTargets, energyPlan, exportJournal, formatDate, importJournal,
+  aggregateEntries, calculateTargets, energyPlan, exportJournal, formatDate, importJournal, knownTotal,
   loadJournal, localDate, saveJournal, shiftDate, summarizeDay, targetNotice,
 } from './journal.mjs';
 
@@ -119,6 +119,18 @@ test('les totaux gardent le volume, les décimales et les nutriments incomplets'
   assert.ok(summary.positive.some(message => message.includes('Protéines')));
   assert.ok(summary.attention.some(message => message.includes('partiels')));
   assert.ok(summary.attention.every(message => !message.includes('Lipides')));
+});
+
+test('les calories inconnues, une quantité vide et un vrai zéro restent distincts', () => {
+  const unidentified = { ...entries[0], items: [{ ...entries[0].items[0], kcal: null }] };
+  const noQuantity = { ...entries[0], items: [{ ...entries[0].items[0], grams: null }] };
+  assert.equal(knownTotal(aggregateEntries([]), 'kcal'), 0);
+  assert.equal(knownTotal(aggregateEntries([unidentified]), 'kcal'), null);
+  assert.equal(knownTotal(aggregateEntries([noQuantity]), 'protein'), null);
+  assert.equal(knownTotal(aggregateEntries([entries[1]]), 'kcal'), 0);
+  const partial = aggregateEntries([unidentified, entries[1]]);
+  assert.equal(knownTotal(partial, 'kcal'), 0);
+  assert.equal(partial.missing.kcal, 1);
 });
 
 test('la sauvegarde préserve les pesées et repères historiques et rejette les entrées invalides', () => {

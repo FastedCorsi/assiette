@@ -1,4 +1,5 @@
 import { photoFoods, photoDrinks } from './photo-foods.mjs';
+import { findCiqualFood } from './ciqual-search.mjs';
 
 // Anses, Table Ciqual 2025, DOI 10.57745/RDMHWY, Licence ouverte Etalab 2.0.
 // Each row records the Ciqual ID, display name, serving size, kcal, protein, carbs,
@@ -78,6 +79,8 @@ const foods = [
   [13005, 'Banane', 120, 87.6, 1.06, 19.7, 0.25, 'bananes'],
   [13039, 'Pomme', 150, 54, 0.25, 11.6, 0.25, 'pommes'],
   [13034, 'Orange', 150, 42, 0.75, 8.03, 0.25, 'oranges'],
+  [13024, 'Clémentine ou mandarine (chair)', 75, 45.5, 0.81, 9.17, 0.25, 'clémentine|clémentines|mandarine|mandarines', 75],
+  [13040, 'Pomélo ou pamplemousse (chair)', 150, 33.5, 0.84, 5.92, 0.25, 'pomelo|pomélos|pamplemousse|pamplemousses'],
   [13014, 'Fraises', 100, 35.1, 0.63, 6.03, 0.25, 'fraise', 14],
   [13015, 'Framboises', 80, 47.9, 1.19, 5.83, 0.8, 'framboise', 4],
   [13028, 'Myrtilles', 80, 57.7, 0.87, 10.6, 0.33, 'myrtille'],
@@ -128,6 +131,11 @@ const foods = [
   [25085, 'Pâtes à la bolognaise', 275, 116, 5.32, 13.6, 4.07, 'pâtes bolognaise|spaghettis à la bolognaise|spaghetti bolognaise|spaghettis bolognaise'],
   [25135, 'Pâtes à la carbonara', 275, 161, 5.91, 14.2, 8.7, 'pâtes carbonara|spaghettis à la carbonara|spaghetti carbonara|spaghettis carbonara'],
   [25187, 'Risotto aux légumes', 250, 120, 2.88, 18.4, 3.8, 'risotto'],
+  [25242, 'Paëlla maison (poulet et fruits de mer)', 275, 135, 6.38, 22, 2.2, 'paella|paella maison|paella au poulet et fruits de mer'],
+  [25138, 'Couscous au poulet', 275, 130, 7.5, 15.6, 3.85, 'couscous poulet'],
+  [25137, 'Tartiflette (référence préemballée)', 275, 161, 6, 13.5, 8.9, 'tartiflette'],
+  [25001, 'Blanquette de veau (référence préemballée)', 250, 113, 15.4, 3.1, 4, 'blanquette|blanquette de veau'],
+  [25009, 'Hachis parmentier à la viande (référence préemballée)', 275, 138, 5.99, 9.39, 8.22, 'hachis parmentier|hachis parmentier à la viande'],
   [25405, 'Quiche lorraine', 160, 269, 8.39, 21.5, 16.4, 'quiche'],
   [25456, 'Sushis aux produits de la mer', 200, 171, 6.69, 26.9, 3.7, 'sushi|sushis|maki|makis|sushi saumon', 28],
   [25459, 'Burrito au bœuf', 250, 170, 8, 14.3, 8.5, 'burrito|burritos'],
@@ -175,6 +183,11 @@ for (const [entries, unit] of [[foods, 'g'], [drinks, 'ml']]) {
     const entry = { name, serving, piece, unit, kcal, protein, carbs, fat, source };
     for (const alias of [name, ...aliases.split('|')].filter(Boolean)) catalog.set(normalize(alias), entry);
   }
+}
+
+export function findFoodReference(name, unit) {
+  const entry = catalog.get(normalize(name)) ?? findCiqualFood(name);
+  return entry && (unit == null || entry.unit === unit) ? entry : null;
 }
 
 const measures = 'kilogrammes?|kilos?|kg|grammes?|grs?|g|millilitres?|ml|centilitres?|cl|décilitres?|dl|litres?|l';
@@ -250,7 +263,7 @@ function splitMeal(text) {
 
 function parseItem(text, isDrink) {
   const { name, amount, unit, count, container } = parseQuantity(text);
-  const entry = catalog.get(normalize(name));
+  const entry = findFoodReference(name);
   const inferredUnit = unit ?? entry?.unit ?? (isDrink || liquidContainers.has(container) ? 'ml' : 'g');
   const serving = entry?.serving ?? (inferredUnit === 'ml' ? 250 : 100);
   let portion = portions.get(container) ?? (container === 'portion' || container === 'pot' ? serving : entry?.piece);

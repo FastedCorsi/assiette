@@ -1,13 +1,13 @@
 import { $, $$, el, icon, button, empty, number, volume } from './ui.mjs';
-import { parseMeal } from './nutrition.mjs';
-import { openReview } from './review.mjs';
+import { parseMeal } from './nutrition.mjs?v=ciqual-2025';
+import { openReview } from './review.mjs?v=ciqual-2025';
 import { createBackupSync } from './backup-sync.mjs';
 import { SPORT_OPTIONS, sportCaloriesPerDay, sportMet } from './activity.mjs';
 import { weightTrend } from './weight-trend.mjs';
 import {
-  calculateTargets, energyPlan, targetNotice, localDate, shiftDate, formatDate, aggregateEntries,
+  calculateTargets, energyPlan, targetNotice, localDate, shiftDate, formatDate, aggregateEntries, knownTotal,
   summarizeDay, loadJournal, saveJournal, exportJournal, importJournal,
-} from './journal.mjs';
+} from './journal.mjs?v=ciqual-2025';
 
 const metrics = [
   { key: 'protein', label: 'Protéines', color: '#397d5b' },
@@ -121,6 +121,7 @@ function updateMeter(meter, amount, target, partial) {
 }
 
 function displayMetric(key, amount) {
+  if (amount == null) return key === 'kcal' ? '— kcal' : '— g';
   if (key === 'water') return volume(amount);
   if (key === 'kcal') return number.format(Math.round(amount)) + ' kcal';
   return number.format(amount) + ' g';
@@ -144,7 +145,7 @@ function metricCard(metric, totals, targets) {
   const countsPlainWater = key === 'water' && Boolean(targets?.ranges?.water);
   const title = el('h2', 'macro-label', countsPlainWater ? 'Eau' : label);
   const value = el('div', 'macro-value');
-  const amount = countsPlainWater ? totals.plainWater : totals[key];
+  const amount = countsPlainWater ? totals.plainWater : knownTotal(totals, key);
   const measured = el('strong', '', displayMetric(key, amount));
   const target = key === 'protein' ? targets?.proteinGoal ?? targets?.protein : targets?.[key];
   const isPartial = Boolean(totals.missing[key]);
@@ -154,7 +155,7 @@ function metricCard(metric, totals, targets) {
   meter.setAttribute('role', 'progressbar');
   meter.setAttribute('aria-label', 'Progression ' + title.textContent.toLowerCase());
   meter.append(el('span'));
-  updateMeter(meter, amount, target, isPartial);
+  updateMeter(meter, amount, amount == null ? null : target, isPartial);
   card.append(title, value, meter);
   if (countsPlainWater) card.append(el('p', 'subtle macro-note', volume(totals.water) + ' de boissons au total'));
   if (key === 'protein' && targets?.proteinGoal != null) {
@@ -167,11 +168,14 @@ function metricCard(metric, totals, targets) {
 function renderEnergy(totals, targets) {
   const energy = $('#energy');
   const note = $('#energy-note');
+  const kcal = knownTotal(totals, 'kcal');
   const incomplete = totals.missing.kcal > 0;
-  energy.replaceChildren(el('strong', '', number.format(Math.round(totals.kcal))),
+  energy.replaceChildren(el('strong', '', kcal == null ? '—' : number.format(Math.round(kcal))),
     el('span', '', targets ? '/ ' + displayMetric('kcal', targets.kcal) : 'kcal'));
-  updateMeter($('#energy-meter'), totals.kcal, targets?.kcal, incomplete);
-  if (incomplete) {
+  updateMeter($('#energy-meter'), kcal, kcal == null ? null : targets?.kcal, incomplete);
+  if (kcal == null) {
+    note.textContent = 'Calories inconnues. Ouvre une entrée pour compléter ses valeurs.';
+  } else if (incomplete) {
     note.textContent = 'Total partiel, des valeurs sont à compléter.';
   } else if (targets) {
     const difference = Math.round(targets.kcal - totals.kcal);
@@ -213,8 +217,8 @@ function renderEntry(entry) {
     (item.unit === 'ml' ? volume(item.grams) : displayMetric('weight', item.grams)) + ')');
   const totals = aggregateEntries([entry]);
   const amounts = [
-    displayMetric('kcal', totals.kcal),
-    ...metrics.slice(0, 3).map(metric => displayMetric(metric.key, totals[metric.key]) + ' ' + metric.label.toLowerCase()),
+    displayMetric('kcal', knownTotal(totals, 'kcal')),
+    ...metrics.slice(0, 3).map(metric => displayMetric(metric.key, knownTotal(totals, metric.key)) + ' ' + metric.label.toLowerCase()),
   ];
   content.append(el('h3', '', entry.label), el('p', 'entry-sub subtle', titles.join(', ')),
     el('p', 'entry-numbers', amounts.join(' · ') + (totals.unknown ? ' · valeurs partielles' : '') +
@@ -297,7 +301,9 @@ function renderHistory() {
     const totals = aggregateEntries(day.entries);
     const details = [];
     if (day.entries.length) {
-      details.push(displayMetric('kcal', totals.kcal) + (totals.missing.kcal ? ' (partiel)' : ''), volume(totals.water) + ' de boissons');
+      const kcal = knownTotal(totals, 'kcal');
+      const energy = kcal == null ? 'Calories à compléter' : displayMetric('kcal', kcal) + (totals.missing.kcal ? ' (partiel)' : '');
+      details.push(energy, volume(totals.water) + ' de boissons');
     }
     if (day.weight != null) details.push(number.format(day.weight) + ' kg');
     const row = el('article', 'history-row');

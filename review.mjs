@@ -1,6 +1,7 @@
 import { $, el, icon, button, number } from './ui.mjs';
-import { aggregateEntries, formatDate } from './journal.mjs';
-import { lookupProducts, parseMeal } from './nutrition.mjs';
+import { aggregateEntries, formatDate, knownTotal } from './journal.mjs?v=ciqual-2025';
+import { findFoodReference, lookupProducts } from './nutrition.mjs?v=ciqual-2025';
+import { searchCiqualFoods } from './ciqual-search.mjs';
 
 const dialog = $('#entry-dialog');
 const reviewForm = $('#review-form');
@@ -29,12 +30,60 @@ function input(type, value, attributes = {}) {
 
 function renderTotal() {
   const totals = aggregateEntries([draft.entry]);
-  const values = [number.format(Math.round(totals.kcal)) + ' kcal',
-    number.format(totals.protein) + ' g prot.',
-    number.format(totals.carbs) + ' g gluc.',
-    number.format(totals.fat) + ' g lip.'];
+  const values = Object.entries({ kcal: 'kcal', protein: 'g prot.', carbs: 'g gluc.', fat: 'g lip.' }).map(([key, suffix]) => {
+    const value = knownTotal(totals, key);
+    return (value == null ? '—' : number.format(key === 'kcal' ? Math.round(value) : value)) + ' ' + suffix;
+  });
   reviewTotal.textContent = values.join(' · ') + (totals.unknown ? ' · total partiel' : '');
   saveButton.disabled = !draft.entry.items.length;
+}
+
+function resultOption(food) {
+  const option = button(food.name, 'button compact result-option');
+  const unit = food.unit ?? 'g/ml';
+  const value = food.kcal == null ? 'Énergie inconnue' : number.format(food.kcal) + ' kcal / 100 ' + unit;
+  option.append(el('small', '', value));
+  return option;
+}
+
+function ciqualLookup(item, choose) {
+  const details = el('details', 'lookup');
+  const query = input('search', item.query || item.name, { maxlength: '160', placeholder: 'Aliment ou plat', enterkeyhint: 'search' });
+  const search = button('Chercher dans Ciqual', 'button compact');
+  search.prepend(icon('search'));
+  const status = el('p', 'small subtle');
+  status.setAttribute('role', 'status');
+  const results = el('div', 'lookup-results');
+
+  function lookup() {
+    const term = query.value.trim();
+    results.replaceChildren();
+    if (term.length < 2) {
+      status.textContent = 'Entre au moins deux caractères.';
+      return;
+    }
+    const foods = searchCiqualFoods(term);
+    status.textContent = foods.length ? 'Choisis la préparation qui correspond.' : 'Essaie un nom plus simple ou saisis les valeurs de ton plat.';
+    for (const food of foods) {
+      const option = resultOption(food);
+      option.addEventListener('click', () => {
+        const unitChanged = choose(food);
+        results.replaceChildren();
+        status.textContent = unitChanged ? 'Renseigne le poids en grammes.' : 'Valeurs Ciqual utilisées.';
+        if (!unitChanged) details.open = false;
+      });
+      results.append(option);
+    }
+  }
+
+  query.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    lookup();
+  });
+  search.addEventListener('click', lookup);
+  details.append(el('summary', '', 'Chercher un aliment ou un plat dans Ciqual'), field('Nom de l’aliment ou du plat', query), search, status, results);
+  return details;
 }
 
 function productLookup(item, refresh) {
@@ -74,10 +123,7 @@ function productLookup(item, refresh) {
       status.textContent = products.length ? 'Choisis le produit correspondant.' : 'Aucun produit trouvé. Essaie le code-barres ou saisis les valeurs de l’étiquette.';
       if (!products.length) offerSearchPage(searchText);
       for (const product of products) {
-        const option = button(product.name, 'button compact result-option');
-        const reference = product.unit === 'ml' ? '100 ml' : product.unit === 'g' ? '100 g' : '100 g/ml';
-        const value = product.kcal == null ? 'Énergie non renseignée' : number.format(product.kcal) + ' kcal / ' + reference;
-        option.append(el('small', '', value));
+        const option = resultOption(product);
         option.addEventListener('click', () => {
           const unitChanged = product.unit && product.unit !== item.unit;
           const { name, kcal, protein, carbs, fat, source } = product;
@@ -153,18 +199,35 @@ function itemEditor(item, index) {
     refreshMetadata();
   }
 
+  function applyCiqual(food) {
+    const unitChanged = item.unit !== food.unit;
+    const { name: foodName, kcal, protein, carbs, fat, source, unit: foodUnit } = food;
+    Object.assign(item, { name: foodName, query: foodName, kcal, protein, carbs, fat, source, unit: foodUnit });
+    if (unitChanged) {
+      item.grams = null;
+      item.estimated = false;
+    }
+    referenceName = item.name.trim();
+    name.setCustomValidity('');
+    refresh();
+    renderTotal();
+    if (unitChanged) quantity.focus();
+    return unitChanged;
+  }
+
   name.addEventListener('input', () => {
     item.name = name.value;
     item.query = name.value;
     name.setCustomValidity(name.value.trim() ? '' : 'Renseigne le nom de l’ingrédient.');
   });
   name.addEventListener('change', () => {
-    if (item.name.trim() === referenceName || !item.source.startsWith('Photo · ')) return;
+    const fromPhoto = item.source.startsWith('Photo · ');
+    const canRecalculate = fromPhoto || item.source.startsWith('Ciqual') || item.source === 'À renseigner' || !item.source;
+    if (item.name.trim() === referenceName || !canRecalculate) return;
     referenceName = item.name.trim();
-    const matches = parseMeal(referenceName);
-    const replacement = matches.length === 1 && matches[0].unit === item.unit ? matches[0] : null;
+    const replacement = findFoodReference(referenceName, item.unit);
     for (const key of Object.keys(nutrients)) item[key] = replacement?.[key] ?? null;
-    item.source = 'Photo · ' + (replacement?.source || 'À renseigner');
+    item.source = (fromPhoto ? 'Photo · ' : '') + (replacement?.source || 'À renseigner');
     refresh();
     renderTotal();
   });
@@ -202,7 +265,7 @@ function itemEditor(item, index) {
   }
   fields.append(field('Aliment ou boisson', name), field('Quantité', quantity), field('Unité', unit), remove);
   details.append(detailTitle, nutrientFields);
-  editor.append(el('legend', '', 'Ingrédient ' + (index + 1)), fields, metadata, details, productLookup(item, () => {
+  editor.append(el('legend', '', 'Ingrédient ' + (index + 1)), fields, metadata, details, ciqualLookup(item, applyCiqual), productLookup(item, () => {
     name.setCustomValidity('');
     referenceName = item.name.trim();
     refresh();
@@ -247,8 +310,17 @@ function showSaveError() {
   reviewError.textContent = 'Impossible de mettre à jour le journal. Vérifie le stockage du navigateur.';
 }
 
+function fillMissingReference(item) {
+  if (item.kcal != null || !['', 'À renseigner', 'Photo · À renseigner'].includes(item.source)) return;
+  const reference = findFoodReference(item.name, item.unit);
+  if (reference?.kcal == null) return;
+  for (const key of Object.keys(nutrients)) item[key] ??= reference[key];
+  item.source = (item.source.startsWith('Photo · ') ? 'Photo · ' : '') + reference.source;
+}
+
 export function openReview(entry, date, save, remove = null) {
   draft = { entry: structuredClone(entry), save, remove };
+  if (remove) draft.entry.items.forEach(fillMissingReference);
   reviewError.hidden = true;
   $('#review-title').textContent = remove ? 'Modifier l’entrée' : 'Vérifier l’entrée';
   $('#review-date').textContent = formatDate(date);

@@ -5,7 +5,7 @@ Assiette est un journal nutritionnel personnel en français. L’application fon
 ## Utilisation
 
 1. Dans **Profil**, renseigne ton âge, ta taille, ton poids, ton objectif et ton activité quotidienne hors sport. Si tu t’entraînes, ajoute le nombre de séances par semaine, l’activité principale et la durée d’une séance. Le profil se conserve entre les visites.
-2. Dans **Journal**, écris par exemple « 150 g de poulet, riz cuit, 1/2 avocat ». Vérifie les portions proposées et ajuste les valeurs pour 100 g ou 100 ml selon l’étiquette ou la recette. La recherche Open Food Facts accepte un nom de produit ou un code-barres. Les données absentes donnent lieu à un total partiel.
+2. Dans **Journal**, écris par exemple « 150 g de poulet, riz cuit, 2 clémentines ». Vérifie les portions et la préparation proposées. Dans le détail d’un ingrédient, **Chercher un aliment ou un plat dans Ciqual** permet de choisir une référence du catalogue. Pour un produit de marque, utilise sa fiche Open Food Facts ou son étiquette. Les données absentes sont indiquées dans le total.
 3. Enregistre les boissons dans le même journal. Le repère Anses s’applique à l’eau nature saisie. Le volume de toutes les boissons reste visible. Si tu définis un repère manuel de boissons, il porte sur ce volume total.
 4. Consulte les jours précédents et enregistre tes pesées dans **Historique**. Chaque journée enregistrée conserve ses repères. Une modification du profil met à jour ceux du jour courant.
 
@@ -31,14 +31,14 @@ Lance le serveur et les tests depuis le dossier du projet.
 
 ```sh
 python -m http.server 4173 --bind 127.0.0.1
-node --test journal.test.mjs nutrition.test.mjs backup-crypto.test.mjs protein-targets.test.mjs weight-trend.test.mjs
+node --test journal.test.mjs nutrition.test.mjs ciqual-search.test.mjs backup-crypto.test.mjs protein-targets.test.mjs weight-trend.test.mjs
 ```
 
 Le journal s’ouvre sur `http://127.0.0.1:4173/`. Le site est statique et ne comporte aucune étape de compilation.
 
 ## Sources et repères
 
-- Aliments génériques et portions types. Les valeurs nutritionnelles proviennent de la [table Ciqual 2025 de l’Anses](https://doi.org/10.57745/RDMHWY), disponible sous Licence Ouverte Etalab 2.0. Les portions proposées sont indicatives et modifiables.
+- Aliments génériques. La recherche locale couvre les 3 484 entrées de la [table Ciqual 2025 de l’Anses](https://doi.org/10.57745/RDMHWY), sous Licence Ouverte Etalab 2.0. Les portions proposées sont indicatives et modifiables. Pour un plat composé, la fiche choisie représente une préparation de référence.
 - Produits de marque. Les fiches sont interrogées dans [Open Food Facts](https://world.openfoodfacts.org/), base collaborative sous [licence ODbL](https://world.openfoodfacts.org/terms-of-use).
 - Énergie. Le métabolisme de base est estimé à partir du poids, de la taille, de l’âge et du sexe selon [Henry 2005, tableau 15](https://www.cambridge.org/core/services/aop-cambridge-core/content/view/61A9EA486ABFA478FEF2FCE1E70D5BEE/S1368980005001394a.pdf). Les quatre choix d’activité hors sport correspondent aux niveaux de 1,4, 1,6, 1,8 et 2,0 repris par l’[EFSA](https://doi.org/10.2903/j.efsa.2013.3005).
 - Sport. Les valeurs par activité proviennent des Compendia 2024 pour [19 à 59 ans](https://pacompendium.com/adult-compendium/) et [60 ans et plus](https://pacompendium.com/older-adult-compendium/). L’application ajoute la dépense des séances au-dessus de 1 MET de repos, en moyenne sur sept jours. Elle utilise 3,5 ou 2,7 mL d’oxygène par kg et par minute pour 1 MET selon la tranche d’âge et environ 5 kcal par litre d’oxygène. Le type et la durée sont nécessaires pour obtenir cet ajustement. [Conversion du Compendium](https://pacompendium.com/corrected-mets/)
